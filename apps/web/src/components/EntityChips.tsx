@@ -59,3 +59,4 @@ export default function EntityChips({ entities }: EntityChipsProps) {
     </div>
   );
 }
+

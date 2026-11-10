@@ -207,3 +207,4 @@ export default function SideBySide({ sentences, highlightedIdx: externalHighligh
     </div>
   );
 }
+

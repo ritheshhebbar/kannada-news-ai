@@ -92,3 +92,4 @@ def extract_numbers_from_text(text: str) -> List[str]:
     numbers = re.findall(r'\b\d+(?:,\d+)*(?:\.\d+)?\b', ascii_text)
     # Strip commas for uniform comparison
     return [n.replace(',', '') for n in numbers]
+

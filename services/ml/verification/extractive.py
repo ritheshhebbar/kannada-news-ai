@@ -30,3 +30,4 @@ def generate_extractive_summary(sentences_en: List[str]) -> Dict[str, Any]:
         "key_points": key_points,
         "method": "extractive_fallback"
     }
+

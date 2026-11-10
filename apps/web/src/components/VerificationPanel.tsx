@@ -59,3 +59,4 @@ export default function VerificationPanel({ verification, method, flagsCount = 0
     </div>
   );
 }
+

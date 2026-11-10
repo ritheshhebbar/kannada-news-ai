@@ -77,3 +77,4 @@ class MockTranslator(BaseTranslator):
             else:
                 translated.append(f"Translation: {res}")
         return translated
+

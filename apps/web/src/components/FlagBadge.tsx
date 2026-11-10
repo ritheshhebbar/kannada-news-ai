@@ -26,3 +26,4 @@ export default function FlagBadge({ flags, onClick }: FlagBadgeProps) {
     </button>
   );
 }
+

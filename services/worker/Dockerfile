@@ -17,3 +17,4 @@ COPY services /app/services
 ENV PYTHONPATH="/app:/app/apps/api"
 
 CMD ["python", "services/worker/worker.py"]
+

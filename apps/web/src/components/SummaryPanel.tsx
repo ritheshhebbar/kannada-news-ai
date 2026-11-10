@@ -115,3 +115,4 @@ export default function SummaryPanel({ summary, onSelectEvidence }: SummaryPanel
     </div>
   );
 }
+

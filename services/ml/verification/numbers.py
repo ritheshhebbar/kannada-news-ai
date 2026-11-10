@@ -30,3 +30,4 @@ def verify_sentence_numbers(source_kn: str, translated_en: str) -> Tuple[bool, L
 
     passed = len(flags) == 0
     return passed, flags
+

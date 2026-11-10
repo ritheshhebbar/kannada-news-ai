@@ -8,3 +8,4 @@ class BaseSummarizer(ABC):
     def summarize(self, numbered_sentences: List[str]) -> Dict[str, Any]:
         """Generate headline, summary, cited key points, and key facts from numbered sentences."""
         pass
+

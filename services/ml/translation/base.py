@@ -13,3 +13,4 @@ class BaseTranslator(ABC):
     def translate_headline(self, headline: str) -> str:
         """Translate a headline with telegraphic news style."""
         pass
+

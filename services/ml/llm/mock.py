@@ -45,3 +45,4 @@ class MockSummarizer(BaseSummarizer):
             },
             "uncertain": [],
         }
+

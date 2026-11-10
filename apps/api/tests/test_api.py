@@ -1,5 +1,12 @@
 import os
+import sys
 import pytest
+
+# Ensure apps/api is in sys.path so tests run from any directory
+api_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if api_dir not in sys.path:
+    sys.path.insert(0, api_dir)
+
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

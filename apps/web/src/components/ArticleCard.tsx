@@ -89,3 +89,4 @@ export default function ArticleCard({ article, showKannadaFirst = false }: Artic
     </Link>
   );
 }
+

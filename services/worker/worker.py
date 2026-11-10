@@ -223,3 +223,4 @@ def run_worker_loop(poll_interval: float = 2.0, max_iterations: Optional[int] = 
 
 if __name__ == "__main__":
     run_worker_loop()
+
