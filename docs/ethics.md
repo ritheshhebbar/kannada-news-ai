@@ -17,3 +17,4 @@
 ## 4. Privacy & Data Handling
 - **User Submissions**: Text submitted by users through the `/submit` endpoint is handled strictly for processing and session-based display. No user data is forwarded to external services for model training without explicit consent.
 - **Session Identifiers**: Anonymous UUID session cookies are used in place of personal user tracking.
+

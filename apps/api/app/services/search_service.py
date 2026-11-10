@@ -11,6 +11,7 @@ from app.models import (
     Category,
     ArticleCategory,
     Feedback,
+    PipelineJob,
 )
 from app.schemas.schemas import (
     ArticleListItem,
@@ -32,7 +33,7 @@ class SearchAndHistoryService:
         if not clean_q:
             return [], 0
 
-        # Record search in history
+        # Record search query in history if session provided
         if session_id:
             db.add(SearchHistory(session_id=session_id, query=clean_q))
             db.commit()
@@ -41,7 +42,8 @@ class SearchAndHistoryService:
         # Search over Kannada text and English translations
         base_query = db.query(Article).filter(
             (Article.title_kn.ilike(pattern)) |
-            (Article.body_kn.ilike(pattern))
+            (Article.body_kn.ilike(pattern)) |
+            (Article.translations.any(func.lower(Article.translations.property.mapper.class_.title_en).like(func.lower(pattern))))
         )
         total = base_query.count()
         articles = base_query.order_by(desc(Article.published_at), desc(Article.id))\
@@ -155,15 +157,23 @@ class SearchAndHistoryService:
         categories = db.query(Category).all()
         cat_counts = {}
         for c in categories:
-            count = db.query(ArticleCategory).filter(ArticleCategory.category_id == c.id).count()
+            count = db.query(Article).filter(
+                (Article.section_label == c.slug) |
+                (Article.categories.any(ArticleCategory.category_id == c.id))
+            ).count()
             cat_counts[c.slug] = count
+
+        in_queue = db.query(PipelineJob).filter(PipelineJob.state.in_(["queued", "running"])).count()
+        pass_rate = 100.0
+        if total_articles > 0:
+            pass_rate = round(float((ready_articles / total_articles) * 100), 1)
 
         return DashboardStats(
             articles_today=total_articles,
             translated_count=ready_articles,
             flagged_for_review=flagged_count,
             average_latency_sec=2.4,
-            items_in_queue=db.query(Article).filter(Article.status.in_(["new", "translating", "summarizing"])).count(),
-            verification_pass_rate=98.5 if total_articles > 0 else 100.0,
+            items_in_queue=in_queue,
+            verification_pass_rate=pass_rate,
             categories_distribution=cat_counts,
         )

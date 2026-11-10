@@ -118,3 +118,4 @@ docker compose up -d
 | **M9** | Comprehensive test suite & error hardening | Planned |
 | **M10** | Production deployment setup | Planned |
 | **M11** | Research paper experiments, demo presentation | Planned |
+

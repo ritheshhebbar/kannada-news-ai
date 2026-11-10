@@ -29,3 +29,4 @@ def get_sources(db: Session = Depends(get_db)):
     """List registered Kannada news outlets and their crawling status."""
     sources = db.query(Source).all()
     return sources
+

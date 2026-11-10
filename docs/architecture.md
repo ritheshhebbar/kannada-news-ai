@@ -39,3 +39,4 @@ flowchart TD
 - **Kannada Text Processing**: Unicode NFC normalization, ZWJ/ZWNJ preservation, Indic-aware sentence tokenizer.
 - **Translation Guards**: Number extractor (handling Kannada numerals ೦-೯, crore, lakh), named entity cross-verification, and semantic cosine similarity.
 - **Faithfulness Verification**: Sentence-evidence validation, entailment checking, and automatic fallback to extractive summarization if hallucination is detected.
+

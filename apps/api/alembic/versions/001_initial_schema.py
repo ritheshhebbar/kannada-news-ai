@@ -244,3 +244,4 @@ def downgrade() -> None:
     op.drop_table('articles')
     op.drop_table('categories')
     op.drop_table('sources')
+

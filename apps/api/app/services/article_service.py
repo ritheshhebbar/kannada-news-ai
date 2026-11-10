@@ -2,6 +2,8 @@ import hashlib
 import unicodedata
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple, Dict, Any
+from urllib.parse import urlparse
+import httpx
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 
@@ -31,19 +33,82 @@ from app.schemas.schemas import (
     ArticleStatusResponse,
 )
 
-def is_predominantly_kannada(text: str, min_ratio: float = 0.4) -> Tuple[bool, float]:
-    """Check whether text consists primarily of Kannada Unicode characters."""
-    total_alpha = 0
+# Permitted domains for URL ingestion as per Section 7.1
+PERMITTED_DOMAINS = [
+    "prajavani.net",
+    "kannadaprabha.com",
+    "vijaykarnataka.com",
+    "udayavani.com",
+    "vijayavani.net",
+    "samyukthakarnataka.com",
+    "pib.gov.in",
+    "localhost",
+    "127.0.0.1",
+]
+
+def is_predominantly_kannada(text: str, min_ratio: float = 0.35) -> Tuple[bool, float]:
+    """Check whether text consists primarily of Kannada Unicode characters.
+    
+    Includes Kannada consonants, independent vowels, dependent vowel signs (matras),
+    viramas, anusvara, visarga, and Kannada numerals (U+0C80 - U+0CFF).
+    """
     kannada_chars = 0
+    non_kannada_letters = 0
     for char in text:
-        if char.isalpha():
-            total_alpha += 1
-            if '\u0C80' <= char <= '\u0CFF':
-                kannada_chars += 1
-    if total_alpha == 0:
+        code = ord(char)
+        if 0x0C80 <= code <= 0x0CFF:
+            kannada_chars += 1
+        elif char.isalpha():
+            non_kannada_letters += 1
+
+    total = kannada_chars + non_kannada_letters
+    if total == 0:
         return False, 0.0
-    ratio = kannada_chars / total_alpha
+    ratio = kannada_chars / total
     return ratio >= min_ratio, ratio
+
+def extract_text_from_url(url: str) -> Tuple[str, str]:
+    """Extract article title and clean Kannada text from a permitted news URL."""
+    domain = urlparse(url).netloc.lower()
+    # Strip port or subdomains for check
+    clean_domain = domain.split(":")[0]
+    is_permitted = any(clean_domain.endswith(p) for p in PERMITTED_DOMAINS)
+    if not is_permitted:
+        raise ValueError(
+            f"Domain '{clean_domain}' is not on the permitted news outlets list. "
+            f"Allowed outlets: {', '.join(PERMITTED_DOMAINS[:6])}"
+        )
+
+    try:
+        import trafilatura
+        headers = {
+            "User-Agent": "KannadaNewsAI-ResearchBot/1.0 (+academic-research; https://github.com/)"
+        }
+        downloaded = trafilatura.fetch_url(url, no_ssl=False)
+        if not downloaded:
+            # Fallback with httpx
+            with httpx.Client(timeout=10.0, headers=headers, follow_redirects=True) as client:
+                resp = client.get(url)
+                resp.raise_for_status()
+                downloaded = resp.text
+
+        extracted = trafilatura.extract(
+            downloaded,
+            include_comments=False,
+            include_tables=False,
+            favor_precision=True
+        )
+        metadata = trafilatura.extract_metadata(downloaded)
+        title = metadata.title if (metadata and metadata.title) else ""
+
+        if not extracted or len(extracted.strip()) < 50:
+            raise ValueError("Could not extract substantial article body text from the provided URL.")
+
+        return title.strip(), extracted.strip()
+    except Exception as e:
+        if isinstance(e, ValueError):
+            raise e
+        raise ValueError(f"Failed to fetch or extract content from URL: {str(e)}")
 
 class ArticleService:
     @staticmethod
@@ -63,7 +128,12 @@ class ArticleService:
         if status:
             query = query.filter(Article.status == status)
         if category_slug:
-            query = query.join(ArticleCategory).join(Category).filter(Category.slug == category_slug)
+            query = query.filter(
+                (Article.section_label == category_slug) |
+                (Article.categories.any(
+                    ArticleCategory.category.has(Category.slug == category_slug)
+                ))
+            )
         if search_query:
             pattern = f"%{search_query.strip()}%"
             query = query.filter(
@@ -79,11 +149,10 @@ class ArticleService:
 
         items = []
         for a in articles:
-            # Active translation headline
             active_trans = next((t for t in a.translations if t.is_active), None)
             active_sum = a.summaries[0] if a.summaries else None
 
-            # Check if any sentence has flags
+            # Check if any sentence has quality flags
             has_flags = False
             if active_trans:
                 for st in active_trans.sentence_translations:
@@ -241,15 +310,27 @@ class ArticleService:
     @staticmethod
     def submit_article(db: Session, req: ArticleSubmitRequest) -> ArticleSubmitResponse:
         content = (req.text or "").strip()
+        title = (req.title or "").strip()
+        extracted_from_url = False
+
+        if not content and req.url:
+            url_title, content = extract_text_from_url(req.url.strip())
+            if not title:
+                title = url_title
+            extracted_from_url = True
+
         if not content:
-            raise ValueError("Article text cannot be empty.")
+            raise ValueError("Either Kannada article text or a permitted news URL must be provided.")
 
         # Script check
         valid_script, ratio = is_predominantly_kannada(content)
-        if not valid_script and not req.url:
-            raise ValueError(f"Submitted text does not appear to be Kannada (Kannada character ratio: {ratio:.1%}). Please input Kannada script.")
+        if not valid_script:
+            raise ValueError(
+                f"Submitted content does not appear to be Kannada (Kannada character ratio: {ratio:.1%}). "
+                f"Please ensure text is in Kannada script."
+            )
 
-        # Normalized Unicode NFC
+        # Unicode NFC Normalization
         clean_body = unicodedata.normalize("NFC", content)
         content_hash = hashlib.sha256(clean_body.encode("utf-8")).hexdigest()
 
@@ -263,16 +344,18 @@ class ArticleService:
                 message="Article already submitted. Showing existing entry.",
             )
 
-        title = req.title.strip() if req.title else clean_body.split("\n")[0][:120]
+        if not title:
+            first_line = clean_body.split("\n")[0].strip()
+            title = first_line[:120] if first_line else "ಕನ್ನಡ ವಾರ್ತೆ"
 
         article = Article(
             source_id=None,
-            origin="user",
-            url=req.url,
+            origin="rss" if extracted_from_url else "user",
+            url=req.url.strip() if req.url else None,
             title_kn=title,
             body_kn=clean_body,
             content_hash=content_hash,
-            section_label=req.section_label or "general",
+            section_label=req.section_label or "karnataka",
             published_at=datetime.now(timezone.utc),
             status="new",
             session_id=req.session_id,
@@ -303,7 +386,6 @@ class ArticleService:
         if not article:
             return None
 
-        # Determine current stage and estimated progress percentage
         progress_map = {
             "new": 10,
             "extracted": 25,

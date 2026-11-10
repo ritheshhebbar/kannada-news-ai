@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional, Any, Dict
+from typing import List, Optional, Any, Dict, Union
 from pydantic import BaseModel, Field, ConfigDict
 
 # --- Reference Schemas ---
@@ -28,7 +28,9 @@ class CategoryResponse(BaseModel):
 # --- Sentence & Translation Schemas ---
 
 class FlagItem(BaseModel):
-    type: str  # 'number_mismatch', 'low_similarity', 'entity_mismatch'
+    model_config = ConfigDict(from_attributes=True)
+
+    type: str  # 'number_mismatch', 'low_similarity', 'entity_mismatch', etc.
     detail: str
     severity: Optional[str] = "warning"
 
@@ -64,18 +66,22 @@ class TranslationResponse(BaseModel):
     title_en: Optional[str] = None
     guard_report: Optional[Dict[str, Any]] = None
     is_active: bool
-    created_at: datetime
+    created_at: Optional[datetime] = None
     sentences: List[SentenceTranslationResponse] = Field(default_factory=list)
 
 
 # --- Summary & Verification Schemas ---
 
 class KeyPointItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     text: str
     evidence: List[int] = Field(default_factory=list)
 
 
 class KeyFacts(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     who: List[str] = Field(default_factory=list)
     what: List[str] = Field(default_factory=list)
     where: List[str] = Field(default_factory=list)
@@ -94,10 +100,10 @@ class SummaryResponse(BaseModel):
     method: str
     headline_en: Optional[str] = None
     summary_en: Optional[str] = None
-    key_points: Optional[List[KeyPointItem]] = None
-    key_facts: Optional[KeyFacts] = None
+    key_points: Optional[List[Union[KeyPointItem, Dict[str, Any]]]] = None
+    key_facts: Optional[Union[KeyFacts, Dict[str, Any]]] = None
     verification: Optional[Dict[str, Any]] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
 
 # --- Entity Schema ---
@@ -195,7 +201,7 @@ class FeedbackResponse(BaseModel):
     sentence_id: Optional[int] = None
     kind: Optional[str] = None
     comment: Optional[str] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
 
 class BookmarkCreate(BaseModel):
@@ -208,7 +214,7 @@ class SearchItemResponse(BaseModel):
 
     id: int
     query: str
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
 
 class ReadingItemResponse(BaseModel):
@@ -218,12 +224,14 @@ class ReadingItemResponse(BaseModel):
     article_id: int
     article_title_kn: Optional[str] = None
     article_title_en: Optional[str] = None
-    opened_at: datetime
+    opened_at: Optional[datetime] = None
 
 
 # --- Stats & Dashboard Schemas ---
 
 class DashboardStats(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     articles_today: int
     translated_count: int
     flagged_for_review: int

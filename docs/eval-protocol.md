@@ -22,3 +22,4 @@
 - Bilingual annotators evaluate randomized, blinded outputs.
 - Sentences scored on Adequacy (1-5) and Fluency (1-5).
 - Discrepancies resolved via Krippendorff's alpha agreement calibration.
+

@@ -30,3 +30,4 @@ def search_articles(
         "page": page,
         "page_size": page_size,
     }
+

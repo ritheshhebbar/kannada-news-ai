@@ -57,3 +57,4 @@ def remove_bookmark(article_id: int, session_id: str = Query(...), db: Session =
     """Remove a bookmarked article."""
     SearchAndHistoryService.remove_bookmark(db, session_id, article_id)
     return
+

@@ -83,3 +83,4 @@ def retry_article_processing(article_id: int, db: Session = Depends(get_db)):
             detail=f"Article with ID {article_id} not found."
         )
     return {"status": "re-queued", "article_id": article_id}
+
