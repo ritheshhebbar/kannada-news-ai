@@ -44,7 +44,7 @@ class GoogleTranslator(BaseTranslator):
             f"Input Kannada Sentences:\n{json.dumps(sentences, ensure_ascii=False)}"
         )
 
-        for m in ["gemini-3-flash-preview", "gemini-3.1-flash-lite", "gemini-2.5-flash"]:
+        for m in ["gemini-3.1-flash-lite", "gemini-3-flash-preview"]:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={self.api_key}"
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],

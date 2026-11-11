@@ -30,7 +30,7 @@ class NewsCollector:
         self.max_articles_per_feed = max_articles_per_feed
         self.robots = RobotsChecker()
         self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) KannadaNewsAI-ResearchBot/1.0"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
         }
 
         if not sources_file:
@@ -72,32 +72,63 @@ class NewsCollector:
                     db.add(src)
                     db.flush()
 
+                # Format dynamic date placeholder if present in feed_url
+                now = datetime.now()
+                feed_url = feed_url.format(month_year=now.strftime("%m-%Y"))
+
                 # Fetch feed XML
                 try:
                     req = urllib.request.Request(feed_url, headers=self.headers)
-                    with urllib.request.urlopen(req, timeout=10) as resp:
+                    with urllib.request.urlopen(req, timeout=12) as resp:
                         xml_bytes = resp.read()
+                    try:
                         root = ET.fromstring(xml_bytes)
+                    except ET.ParseError:
+                        import re
+                        clean_xml = re.sub(b"&(?!(amp|lt|gt|quot|apos);)", b"&amp;", xml_bytes)
+                        root = ET.fromstring(clean_xml)
                 except Exception as e:
-                    logger.error("Failed to read RSS feed for %s: %s", source_name, e)
+                    logger.error("Failed to read RSS/sitemap feed for %s (%s): %s", source_name, feed_url, e)
                     continue
 
-                items = root.findall(".//item")
+                # Extract candidate entries: check RSS <item> first, then sitemap <url>
+                feed_entries = []
+                rss_items = root.findall(".//item")
+                if rss_items:
+                    for item in rss_items:
+                        t_el = item.find("title")
+                        l_el = item.find("link")
+                        if l_el is not None:
+                            url_str = (l_el.text or "").strip()
+                            title_str = (t_el.text or "").strip() if t_el is not None else ""
+                            if url_str:
+                                feed_entries.append((title_str, url_str))
+                else:
+                    # Check XML sitemap format
+                    sitemap_urls = root.findall(".//{http://www.sitemaps.org/schemas/sitemap/0.9}url") or root.findall(".//url")
+                    # For sitemaps with newest at the end, take reversed
+                    for url_node in reversed(sitemap_urls):
+                        loc_el = url_node.find("{http://www.sitemaps.org/schemas/sitemap/0.9}loc")
+                        if loc_el is None:
+                            loc_el = url_node.find("loc")
+                        if loc_el is not None and loc_el.text:
+                            url_str = loc_el.text.strip()
+                            news_el = url_node.find("{http://www.google.com/schemas/sitemap-news/0.9}news")
+                            title_str = ""
+                            if news_el is not None:
+                                title_elem = news_el.find("{http://www.google.com/schemas/sitemap-news/0.9}title")
+                                if title_elem is not None and title_elem.text:
+                                    title_str = title_elem.text.strip()
+                            if url_str:
+                                feed_entries.append((title_str, url_str))
+
                 count_for_source = 0
 
-                for item in items:
+                for title_kn, article_url in feed_entries:
                     if count_for_source >= self.max_articles_per_feed:
                         break
 
-                    title_el = item.find("title")
-                    link_el = item.find("link")
-                    if title_el is None or link_el is None:
-                        continue
-
-                    title_kn = (title_el.text or "").strip()
-                    article_url = (link_el.text or "").strip()
-
-                    if not article_url or not title_kn:
+                    if not article_url:
                         continue
 
                     # Deduplication check by URL
@@ -114,13 +145,51 @@ class NewsCollector:
                     # Download and extract article body
                     try:
                         downloaded = trafilatura.fetch_url(article_url)
-                        raw_body = trafilatura.extract(downloaded) or ""
+                        raw_body = ""
+
+                        # Special handling for Udayavani's dynamic Cloudfront JSON
+                        if "udayavani.com" in article_url and downloaded:
+                            import re
+                            from bs4 import BeautifulSoup
+                            json_paths = re.findall(r'(/test-news/news-json/[a-zA-Z0-9_.-]+\.json)', downloaded)
+                            if json_paths:
+                                cf_url = f"https://d3jde0c4xcko0v.cloudfront.net/production{json_paths[0]}"
+                                try:
+                                    req_cf = urllib.request.Request(cf_url, headers=self.headers)
+                                    with urllib.request.urlopen(req_cf, timeout=6) as r_cf:
+                                        cf_data = r_cf.read().decode("utf-8", errors="ignore")
+                                        soup = BeautifulSoup(cf_data, "html.parser")
+                                        raw_body = soup.get_text(separator="\n", strip=True)
+                                except Exception as ex_cf:
+                                    logger.warning("Udayavani Cloudfront JSON fetch error: %s", ex_cf)
+
+                        if not raw_body and downloaded:
+                            raw_body = trafilatura.extract(downloaded) or ""
+
+                        # If title_kn was empty from sitemap, extract from HTML
+                        if not title_kn and downloaded:
+                            from bs4 import BeautifulSoup
+                            soup = BeautifulSoup(downloaded, "html.parser")
+                            h1 = soup.find("h1")
+                            if h1 and h1.get_text().strip():
+                                title_kn = h1.get_text().strip()
+                            elif soup.title and soup.title.string:
+                                title_kn = soup.title.string.split("|")[0].split("-")[0].strip()
+
                     except Exception as e:
                         logger.error("Failed extracting article %s: %s", article_url, e)
                         raw_body = ""
+                        title_kn = title_kn or ""
+
+                    if not title_kn:
+                        continue
 
                     # Clean paragraphs: remove ads, short menu navigation, and footers
-                    blacklist = ["Go Ad Lite", "ಜಾಹೀರಾತು", "Comments", "ಫಾಲೋ ಮಾಡಿ", "ಪ್ರಜಾವಾಣಿ ಆ್ಯಪ್", "ಇ–ಪೇಪರ್", "Subscribe", "ಡೌನ್‌ಲೋಡ್", "Published"]
+                    blacklist = [
+                        "Go Ad Lite", "ಜಾಹೀರಾತು", "Comments", "ಫಾಲೋ ಮಾಡಿ", "ಪ್ರಜಾವಾಣಿ ಆ್ಯಪ್",
+                        "ಇ–ಪೇಪರ್", "Subscribe", "ಡೌನ್‌ಲೋಡ್", "Published", "ADVERTISEMENT",
+                        "Team Udayavani", "Visit UV English", "Get App Android"
+                    ]
                     clean_paras = []
                     for line in raw_body.splitlines():
                         l = line.strip()

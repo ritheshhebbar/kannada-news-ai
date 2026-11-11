@@ -5,7 +5,7 @@ sources:
     feed_url: "https://www.prajavani.net/feed"
     section_label: "karnataka"
     active: true
-    rate_limit_delay_sec: 2.0
+    rate_limit_delay_sec: 1.0
 
   - id: 2
     name: "OneIndia Kannada"
@@ -13,4 +13,52 @@ sources:
     feed_url: "https://kannada.oneindia.com/rss/kannada-news-fb.xml"
     section_label: "karnataka"
     active: true
-    rate_limit_delay_sec: 2.0
+    rate_limit_delay_sec: 1.0
+
+  - id: 3
+    name: "Vijay Karnataka"
+    base_url: "https://vijaykarnataka.com"
+    feed_url: "https://vijaykarnataka.com/sitemap/rssfeed.xml"
+    section_label: "karnataka"
+    active: true
+    rate_limit_delay_sec: 1.0
+
+  - id: 4
+    name: "News18 Kannada"
+    base_url: "https://kannada.news18.com"
+    feed_url: "https://kannada.news18.com/commonfeeds/v1/kan/rss/latest.xml"
+    section_label: "karnataka"
+    active: true
+    rate_limit_delay_sec: 1.0
+
+  - id: 5
+    name: "Asianet News Kannada"
+    base_url: "https://kannada.asianetnews.com"
+    feed_url: "https://kannada.asianetnews.com/rss"
+    section_label: "karnataka"
+    active: true
+    rate_limit_delay_sec: 1.0
+
+  - id: 6
+    name: "Times Now Kannada"
+    base_url: "https://kannada.timesnownews.com"
+    feed_url: "https://kannada.timesnownews.com/feeds/gns-kn-latest.xml"
+    section_label: "karnataka"
+    active: true
+    rate_limit_delay_sec: 1.0
+
+  - id: 7
+    name: "Kannada Prabha"
+    base_url: "https://www.kannadaprabha.com"
+    feed_url: "https://www.kannadaprabha.com/news_sitemap.xml"
+    section_label: "karnataka"
+    active: true
+    rate_limit_delay_sec: 1.0
+
+  - id: 8
+    name: "Udayavani"
+    base_url: "https://udayavani.com"
+    feed_url: "https://udayavani.com/kan/{month_year}.xml"
+    section_label: "karnataka"
+    active: true
+    rate_limit_delay_sec: 1.0

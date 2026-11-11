@@ -16,11 +16,11 @@ class GeminiSummarizer(BaseSummarizer):
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "gemini-3-flash-preview",
+        model: str = "gemini-3.1-flash-lite",
         prompt_file: Optional[str] = None,
     ):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY", "").strip()
-        self.model = model or os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
+        self.model = model or os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
         
         # Load prompt template
         if prompt_file and os.path.exists(prompt_file):
@@ -44,7 +44,7 @@ class GeminiSummarizer(BaseSummarizer):
             return None
 
         # Support fallback models if primary model is unavailable
-        models_to_try = [self.model, "gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3-flash-preview"]
+        models_to_try = [self.model, "gemini-3.1-flash-lite", "gemini-3-flash-preview"]
         for m in models_to_try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={self.api_key}"
             payload = {

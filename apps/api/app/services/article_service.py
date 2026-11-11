@@ -466,7 +466,7 @@ class ArticleService:
 
         from app.config import settings
         api_key = settings.GEMINI_API_KEY
-        model_name = settings.GEMINI_MODEL or "gemini-3-flash-preview"
+        model_name = settings.GEMINI_MODEL or "gemini-3.1-flash-lite"
 
         system_instruction = (
             "You are a strictly grounded AI news assistant. Answer the user's question using ONLY the provided numbered sentences.\n"
@@ -482,7 +482,7 @@ class ArticleService:
         # Try Gemini API
         if api_key:
             import urllib.request, json, re
-            for m in [model_name, "gemini-3-flash-preview", "gemini-3.1-flash-lite", "gemini-2.5-flash"]:
+            for m in [model_name, "gemini-3.1-flash-lite", "gemini-3-flash-preview"]:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
                 payload = {
                     "contents": [{"parts": [{"text": prompt}]}],
