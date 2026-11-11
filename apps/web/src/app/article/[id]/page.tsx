@@ -8,6 +8,7 @@ import SideBySide from "@/components/SideBySide";
 import SummaryPanel from "@/components/SummaryPanel";
 import VerificationPanel from "@/components/VerificationPanel";
 import EntityChips from "@/components/EntityChips";
+import { AudioPlayer } from "@/components/AudioPlayer";
 import { Bookmark, BookmarkCheck, ExternalLink, MessageSquare, ArrowLeft, RefreshCw, Loader2, Sparkles } from "lucide-react";
 
 export default function ArticleDetailPage() {
@@ -227,6 +228,14 @@ export default function ArticleDetailPage() {
         {/* Named Entity Chips */}
         <EntityChips entities={article.entities} />
       </div>
+
+      {/* Audio News Briefing (Text-to-Speech) */}
+      <AudioPlayer
+        englishHeadline={article.active_translation?.title_en || article.title_en}
+        englishSummary={article.active_summary?.summary_en}
+        englishKeyPoints={article.active_summary?.key_points || []}
+        kannadaBody={article.body_kn}
+      />
 
       {/* Two Column Layout: Summary & Verification on Left, Side-by-Side Reader on Right */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
