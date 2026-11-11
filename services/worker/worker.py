@@ -25,9 +25,23 @@ from services.ml.kannada_text import (
     split_kannada_sentences,
 )
 from services.ml.translation.mock import MockTranslator
+from services.ml.translation.google import GoogleTranslator
 from services.ml.llm.mock import MockSummarizer
+from services.ml.llm.gemini import GeminiSummarizer
 from services.ml.verification.numbers import verify_sentence_numbers
 from services.ml.verification.extractive import generate_extractive_summary
+
+def get_translator():
+    backend = os.getenv("TRANSLATION_BACKEND", "google").lower()
+    if backend in ("google", "gemini", "gtx", "google_api"):
+        return GoogleTranslator(), "google_translate", "google-nmt-v1"
+    return MockTranslator(), "mock_indictrans2", "indictrans2-indic-en-dist-200M"
+
+def get_summarizer():
+    provider = os.getenv("LLM_PROVIDER", "gemini").lower()
+    if provider in ("gemini", "google"):
+        return GeminiSummarizer(), "gemini-2.5-flash"
+    return MockSummarizer(), "mock"
 
 def process_job(db, job: PipelineJob) -> bool:
     """Execute pipeline stages for an article job."""
@@ -67,7 +81,7 @@ def process_job(db, job: PipelineJob) -> bool:
             sentence_objs.append(s_obj)
 
         # Stage 3: Kannada-to-English Translation
-        translator = MockTranslator()
+        translator, backend_name, model_ver = get_translator()
         headline_en = translator.translate_headline(article.title_kn or "")
         en_sentences = translator.translate_sentences([s.text_kn for s in sentence_objs])
 
@@ -77,8 +91,8 @@ def process_job(db, job: PipelineJob) -> bool:
 
         translation = Translation(
             article_id=article.id,
-            backend="mock_indictrans2",
-            model_version="indictrans2-indic-en-dist-200M",
+            backend=backend_name,
+            model_version=model_ver,
             title_en=headline_en,
             is_active=True
         )
@@ -113,7 +127,7 @@ def process_job(db, job: PipelineJob) -> bool:
 
         # Stage 5 & 6: Summarization & Verification
         article.status = "summarizing"
-        summarizer = MockSummarizer()
+        summarizer, model_name = get_summarizer()
         summary_result = summarizer.summarize(en_sentences)
 
         # Verification check: validate evidence sentence IDs exist
@@ -151,7 +165,7 @@ def process_job(db, job: PipelineJob) -> bool:
         summary_obj = Summary(
             article_id=article.id,
             translation_id=translation.id,
-            model="gemini-2.5-flash-mock",
+            model=model_name,
             prompt_version="summarize_v1.txt",
             method=summary_method,
             headline_en=final_headline,

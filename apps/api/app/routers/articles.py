@@ -1,8 +1,11 @@
+import os
+import sys
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, status
 from sqlalchemy.orm import Session
 
-from app.db import get_db
+from app.db import get_db, SessionLocal
+from app.models import PipelineJob
 from app.schemas.schemas import (
     ArticleListItem,
     ArticleDetailResponse,
@@ -13,6 +16,27 @@ from app.schemas.schemas import (
 from app.services.article_service import ArticleService
 
 router = APIRouter(prefix="/articles", tags=["Articles"])
+
+def run_article_pipeline_task(article_id: int, job_id: int):
+    """Executes the pipeline job for an article in the background."""
+    try:
+        from services.worker.worker import process_job
+    except ImportError:
+        root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+        if root_dir not in sys.path:
+            sys.path.insert(0, root_dir)
+        from services.worker.worker import process_job
+
+    db = SessionLocal()
+    try:
+        job = db.query(PipelineJob).filter(PipelineJob.id == job_id).first()
+        if job and job.state in ("queued", "failed"):
+            print(f"[BackgroundTask] Processing Job {job_id} for Article {article_id}...")
+            process_job(db, job)
+    except Exception as e:
+        print(f"[BackgroundTask] Error processing Article {article_id}: {e}")
+    finally:
+        db.close()
 
 @router.get("", response_model=dict)
 def list_articles(
@@ -54,10 +78,17 @@ def get_article(article_id: int, db: Session = Depends(get_db)):
     return article
 
 @router.post("/submit", response_model=ArticleSubmitResponse, status_code=status.HTTP_201_CREATED)
-def submit_article(payload: ArticleSubmitRequest, db: Session = Depends(get_db)):
+def submit_article(
+    payload: ArticleSubmitRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
     """Submit Kannada text or article URL for translation and summarization."""
     try:
         response = ArticleService.submit_article(db, payload)
+        if response.job_id:
+            # Trigger background pipeline execution immediately
+            background_tasks.add_task(run_article_pipeline_task, response.article_id, response.job_id)
         return response
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -74,13 +105,18 @@ def get_article_status(article_id: int, db: Session = Depends(get_db)):
     return stat
 
 @router.post("/{article_id}/retry", response_model=dict)
-def retry_article_processing(article_id: int, db: Session = Depends(get_db)):
+def retry_article_processing(
+    article_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
     """Re-queue an article if any AI stage failed."""
-    success = ArticleService.retry_article_stage(db, article_id)
+    success, job_id = ArticleService.retry_article_stage(db, article_id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Article with ID {article_id} not found."
         )
+    if job_id:
+        background_tasks.add_task(run_article_pipeline_task, article_id, job_id)
     return {"status": "re-queued", "article_id": article_id}
-

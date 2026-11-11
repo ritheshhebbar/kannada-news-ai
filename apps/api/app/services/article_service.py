@@ -413,10 +413,10 @@ class ArticleService:
         )
 
     @staticmethod
-    def retry_article_stage(db: Session, article_id: int) -> bool:
+    def retry_article_stage(db: Session, article_id: int) -> Tuple[bool, Optional[int]]:
         article = db.query(Article).filter(Article.id == article_id).first()
         if not article:
-            return False
+            return False, None
 
         article.status = "new"
         job = PipelineJob(
@@ -428,4 +428,4 @@ class ArticleService:
         )
         db.add(job)
         db.commit()
-        return True
+        return True, job.id

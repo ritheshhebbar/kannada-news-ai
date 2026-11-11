@@ -164,3 +164,4 @@ def test_worker_process_job_lifecycle():
     assert len(sm.key_points) > 0
 
     db.close()
+

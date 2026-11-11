@@ -50,24 +50,8 @@ export default function SubmitArticlePage() {
         session_id: sid,
       });
 
-      // Poll until ready or redirect
-      const articleId = res.article_id;
-
-      // Start brief polling
-      let attempts = 0;
-      const poll = setInterval(async () => {
-        attempts++;
-        try {
-          const statusRes = await api.getArticleStatus(articleId);
-          if (statusRes.status === "ready" || statusRes.status === "needs_review" || attempts > 15) {
-            clearInterval(poll);
-            router.push(`/article/${articleId}`);
-          }
-        } catch (e) {
-          clearInterval(poll);
-          router.push(`/article/${articleId}`);
-        }
-      }, 1000);
+      // Immediate redirect to article page where live progress tracking handles completion
+      router.push(`/article/${res.article_id}`);
     } catch (err: any) {
       setError(err.message || "Failed to submit article.");
       setSubmitting(false);
@@ -204,7 +188,7 @@ export default function SubmitArticlePage() {
             {submitting ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Translating & Generating Summary...</span>
+                <span>Submitting to AI Pipeline...</span>
               </>
             ) : (
               <>
@@ -218,4 +202,3 @@ export default function SubmitArticlePage() {
     </div>
   );
 }
-

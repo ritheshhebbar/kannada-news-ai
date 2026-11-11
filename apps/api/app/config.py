@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     TRANSLATION_BACKEND: str = os.environ.get("TRANSLATION_BACKEND", "mock")
     LLM_PROVIDER: str = os.environ.get("LLM_PROVIDER", "mock")
     GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY", "")
-    GEMINI_MODEL: str = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+    GEMINI_MODEL: str = os.environ.get("GEMINI_MODEL", "gemini-3-flash-preview")
     
     # Worker Configuration
     WORKER_POLL_INTERVAL: float = 2.0

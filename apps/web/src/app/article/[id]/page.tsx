@@ -8,7 +8,7 @@ import SideBySide from "@/components/SideBySide";
 import SummaryPanel from "@/components/SummaryPanel";
 import VerificationPanel from "@/components/VerificationPanel";
 import EntityChips from "@/components/EntityChips";
-import { Bookmark, BookmarkCheck, ExternalLink, MessageSquare, ArrowLeft, RefreshCw } from "lucide-react";
+import { Bookmark, BookmarkCheck, ExternalLink, MessageSquare, ArrowLeft, RefreshCw, Loader2, Sparkles } from "lucide-react";
 
 export default function ArticleDetailPage() {
   const params = useParams();
@@ -22,27 +22,53 @@ export default function ArticleDetailPage() {
   const [feedbackKind, setFeedbackKind] = useState("translation_error");
   const [feedbackComment, setFeedbackComment] = useState("");
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  const [pollingStatus, setPollingStatus] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchArticle = () => {
     if (!articleId) return;
-
     const sid = getSessionId();
     api.getArticle(articleId)
       .then((data) => {
         setArticle(data);
-        // Record in reading history
+        setPollingStatus(data.status);
         api.recordReading(sid, articleId).catch(() => {});
       })
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
+  };
 
-    // Check if bookmarked
+  useEffect(() => {
+    fetchArticle();
+
+    const sid = getSessionId();
     api.getBookmarks(sid)
       .then((bm) => {
         setIsBookmarked(bm.some((b) => b.id === articleId));
       })
       .catch(() => {});
   }, [articleId]);
+
+  // Auto-poll if article is still being processed
+  useEffect(() => {
+    if (!article) return;
+    if (article.status === "ready" || article.status === "needs_review" || article.status === "failed") {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      api.getArticle(articleId)
+        .then((updated) => {
+          setArticle(updated);
+          setPollingStatus(updated.status);
+          if (updated.status === "ready" || updated.status === "needs_review") {
+            clearInterval(interval);
+          }
+        })
+        .catch(() => {});
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [article?.status, articleId]);
 
   const toggleBookmark = async () => {
     const sid = getSessionId();
@@ -99,6 +125,8 @@ export default function ArticleDetailPage() {
     );
   }
 
+  const isProcessing = article.status !== "ready" && article.status !== "needs_review" && article.status !== "failed";
+
   return (
     <div className="pb-16">
       {/* Back button & Action Bar */}
@@ -134,6 +162,28 @@ export default function ArticleDetailPage() {
           </button>
         </div>
       </div>
+
+      {/* Processing Status Banner if in flight */}
+      {isProcessing && (
+        <div className="mb-6 p-4 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-between text-indigo-900">
+          <div className="flex items-center gap-3">
+            <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
+            <div>
+              <p className="text-sm font-bold">AI Pipeline is currently processing this article...</p>
+              <p className="text-xs text-indigo-700">
+                Current stage: <span className="font-mono font-semibold uppercase">{article.status}</span>. Generating translations and verifying claims.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={fetchArticle}
+            className="text-xs font-semibold px-3 py-1.5 bg-white text-indigo-600 rounded-lg shadow-2xs hover:bg-indigo-50 transition"
+          >
+            Refresh Now
+          </button>
+        </div>
+      )}
 
       {/* Article Header */}
       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-6 sm:p-8 mb-6 shadow-xs">
@@ -269,4 +319,3 @@ export default function ArticleDetailPage() {
     </div>
   );
 }
-
