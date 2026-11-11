@@ -234,7 +234,6 @@ export default function ArticleDetailPage() {
         englishHeadline={article.active_translation?.title_en || article.title_en}
         englishSummary={article.active_summary?.summary_en}
         englishKeyPoints={article.active_summary?.key_points || []}
-        kannadaBody={article.body_kn}
       />
 
       {/* Two Column Layout: Summary & Verification on Left, Side-by-Side Reader on Right */}
