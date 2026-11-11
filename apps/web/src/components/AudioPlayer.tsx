@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Volume2, VolumeX, Play, Pause, Square, FastForward } from "lucide-react";
+import { Volume2, Play, Pause, Square } from "lucide-react";
 
 interface AudioPlayerProps {
   englishSummary?: string;
@@ -16,6 +16,7 @@ export function AudioPlayer({
   englishKeyPoints = [],
   kannadaBody,
 }: AudioPlayerProps) {
+  const [mounted, setMounted] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [audioMode, setAudioMode] = useState<"summary" | "kannada">("summary");
@@ -27,25 +28,34 @@ export function AudioPlayer({
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   useEffect(() => {
+    setMounted(true);
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       setSupported(true);
       synthRef.current = window.speechSynthesis;
 
       const updateVoices = () => {
         if (synthRef.current) {
-          setAvailableVoices(synthRef.current.getVoices());
+          try {
+            setAvailableVoices(synthRef.current.getVoices());
+          } catch (e) {
+            // ignore
+          }
         }
       };
 
       updateVoices();
-      if (speechSynthesis.onvoiceschanged !== undefined) {
-        speechSynthesis.onvoiceschanged = updateVoices;
+      if (window.speechSynthesis && window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = updateVoices;
       }
     }
 
     return () => {
       if (synthRef.current) {
-        synthRef.current.cancel();
+        try {
+          synthRef.current.cancel();
+        } catch (e) {
+          // ignore
+        }
       }
     };
   }, []);
@@ -55,7 +65,6 @@ export function AudioPlayer({
       return kannadaBody || "ಯಾವುದೇ ಪಠ್ಯ ಲಭ್ಯವಿಲ್ಲ.";
     }
 
-    // Build comprehensive English audio briefing
     let text = "";
     if (englishHeadline) {
       text += `Headline: ${englishHeadline}. `;
@@ -89,7 +98,6 @@ export function AudioPlayer({
     utteranceRef.current = utterance;
     utterance.rate = rate;
 
-    // Pick suitable voice
     if (audioMode === "kannada") {
       const knVoice = availableVoices.find(
         (v) => v.lang.startsWith("kn") || v.lang.includes("kn-IN")
@@ -142,16 +150,15 @@ export function AudioPlayer({
     const nextRate = speeds[nextIdx];
     setRate(nextRate);
     if (isPlaying) {
-      // Re-trigger with new speed
       handleStop();
       setTimeout(handlePlay, 100);
     }
   };
 
-  if (!supported) return null;
+  if (!mounted || !supported) return null;
 
   return (
-    <div className="bg-gradient-to-r from-indigo-50/70 via-white to-indigo-50/40 border border-indigo-100 rounded-xl p-3.5 mb-6 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+    <div className="bg-gradient-to-r from-indigo-50/70 via-white to-indigo-50/40 border border-indigo-100 rounded-xl p-3.5 mb-6 flex flex-wrap items-center justify-between gap-3 shadow-xs">
       <div className="flex items-center gap-3">
         <div className="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs">
           {isPlaying ? (
@@ -179,7 +186,7 @@ export function AudioPlayer({
       </div>
 
       <div className="flex items-center flex-wrap gap-2">
-        {/* Language / Mode selector */}
+        {/* Language selector */}
         <div className="flex items-center bg-slate-100/90 p-0.5 rounded-lg text-xs font-medium">
           <button
             type="button"
@@ -191,7 +198,7 @@ export function AudioPlayer({
             }}
             className={`px-2.5 py-1 rounded-md transition text-xs ${
               audioMode === "summary"
-                ? "bg-white text-indigo-700 shadow-2xs font-bold"
+                ? "bg-white text-indigo-700 shadow-xs font-bold"
                 : "text-slate-600 hover:text-slate-900"
             }`}
           >
@@ -207,7 +214,7 @@ export function AudioPlayer({
             }}
             className={`px-2.5 py-1 rounded-md transition text-xs ${
               audioMode === "kannada"
-                ? "bg-white text-indigo-700 shadow-2xs font-bold"
+                ? "bg-white text-indigo-700 shadow-xs font-bold"
                 : "text-slate-600 hover:text-slate-900"
             }`}
           >
@@ -220,7 +227,7 @@ export function AudioPlayer({
           type="button"
           onClick={cycleSpeed}
           title="Change playback speed"
-          className="text-xs font-semibold px-2 py-1 bg-white border border-slate-200 hover:border-indigo-300 text-slate-700 rounded-lg shadow-2xs transition"
+          className="text-xs font-semibold px-2 py-1 bg-white border border-slate-200 hover:border-indigo-300 text-slate-700 rounded-lg shadow-xs transition"
         >
           {rate}x
         </button>
