@@ -3,11 +3,28 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Search, PlusCircle, BookOpen, BarChart2, Bookmark, Globe } from "lucide-react";
+import { Search, PlusCircle, BookOpen, BarChart2, Bookmark, Globe, RefreshCw } from "lucide-react";
+import { api } from "@/lib/api";
 
 export default function Navbar() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [syncToast, setSyncToast] = useState<string | null>(null);
+
+  const handleSyncRss = async () => {
+    setSyncing(true);
+    try {
+      await api.syncRssNews();
+      setSyncToast("Sync started! Fetching & translating latest news...");
+      setTimeout(() => setSyncToast(null), 4000);
+    } catch (err: any) {
+      setSyncToast("Failed to start sync.");
+      setTimeout(() => setSyncToast(null), 3000);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,6 +93,17 @@ export default function Navbar() {
             <BarChart2 className="w-4 h-4" />
           </Link>
 
+          <button
+            type="button"
+            onClick={handleSyncRss}
+            disabled={syncing}
+            title="Fetch and translate live breaking Kannada news from Prajavani & regional feeds"
+            className="px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg border border-slate-200 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin text-indigo-600" : ""}`} />
+            <span className="hidden sm:inline">{syncing ? "Syncing..." : "Sync Live News"}</span>
+          </button>
+
           <Link
             href="/submit"
             className="ml-2 inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-medium px-3.5 py-1.5 rounded-full shadow-sm transition"
@@ -85,6 +113,12 @@ export default function Navbar() {
           </Link>
         </nav>
       </div>
+
+      {syncToast && (
+        <div className="bg-indigo-600 text-white text-xs py-1.5 px-4 text-center font-medium animate-fadeIn">
+          {syncToast}
+        </div>
+      )}
     </header>
   );
 }

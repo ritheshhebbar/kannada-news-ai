@@ -213,4 +213,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ question, session_id: sessionId }),
     }),
+
+  syncRssNews: () =>
+    request<{ status: string; message: string }>("/collector/sync", { method: "POST" }),
 };

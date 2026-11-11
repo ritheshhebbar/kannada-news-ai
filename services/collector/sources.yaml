@@ -1,0 +1,16 @@
+sources:
+  - id: 1
+    name: "Prajavani"
+    base_url: "https://www.prajavani.net"
+    feed_url: "https://www.prajavani.net/feed"
+    section_label: "karnataka"
+    active: true
+    rate_limit_delay_sec: 2.0
+
+  - id: 2
+    name: "OneIndia Kannada"
+    base_url: "https://kannada.oneindia.com"
+    feed_url: "https://kannada.oneindia.com/rss/kannada-news-fb.xml"
+    section_label: "karnataka"
+    active: true
+    rate_limit_delay_sec: 2.0

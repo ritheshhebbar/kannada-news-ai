@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.db import engine, Base
-from app.routers import articles, search, history, feedback, stats
+from app.routers import articles, search, history, feedback, stats, collector
 
 logger = logging.getLogger("uvicorn")
 
@@ -43,6 +43,7 @@ app.include_router(search.router, prefix=settings.API_PREFIX)
 app.include_router(history.router, prefix=settings.API_PREFIX)
 app.include_router(feedback.router, prefix=settings.API_PREFIX)
 app.include_router(stats.router, prefix=settings.API_PREFIX)
+app.include_router(collector.router, prefix=settings.API_PREFIX)
 
 @app.get("/health", tags=["Health"])
 def health_check():
