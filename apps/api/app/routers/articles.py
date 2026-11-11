@@ -12,6 +12,8 @@ from app.schemas.schemas import (
     ArticleSubmitRequest,
     ArticleSubmitResponse,
     ArticleStatusResponse,
+    ArticleAskRequest,
+    ArticleAskResponse,
 )
 from app.services.article_service import ArticleService
 
@@ -120,3 +122,19 @@ def retry_article_processing(
     if job_id:
         background_tasks.add_task(run_article_pipeline_task, article_id, job_id)
     return {"status": "re-queued", "article_id": article_id}
+
+@router.post("/{article_id}/ask", response_model=ArticleAskResponse)
+def ask_article_question(
+    article_id: int,
+    payload: ArticleAskRequest,
+    db: Session = Depends(get_db)
+):
+    """Answer questions about an article strictly grounded in the translated text."""
+    res = ArticleService.answer_question(db, article_id, payload.question)
+    if not res:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Article with ID {article_id} not found."
+        )
+    return res
+

@@ -9,6 +9,7 @@ import SummaryPanel from "@/components/SummaryPanel";
 import VerificationPanel from "@/components/VerificationPanel";
 import EntityChips from "@/components/EntityChips";
 import { AudioPlayer } from "@/components/AudioPlayer";
+import { AskArticleChat } from "@/components/AskArticleChat";
 import { Bookmark, BookmarkCheck, ExternalLink, MessageSquare, ArrowLeft, RefreshCw, Loader2, Sparkles } from "lucide-react";
 
 export default function ArticleDetailPage() {
@@ -249,6 +250,12 @@ export default function ArticleDetailPage() {
             verification={article.active_summary?.verification}
             method={article.active_summary?.method}
             flagsCount={article.flags?.length || 0}
+          />
+
+          {/* Grounded Q&A Chatbot */}
+          <AskArticleChat
+            articleId={articleId}
+            onSelectEvidence={(sIdx) => setHighlightedSentIdx(sIdx)}
           />
         </div>
 

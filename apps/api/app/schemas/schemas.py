@@ -239,3 +239,19 @@ class DashboardStats(BaseModel):
     items_in_queue: int
     verification_pass_rate: float
     categories_distribution: Dict[str, int]
+
+
+# --- Grounded Q&A Schemas ---
+
+class ArticleAskRequest(BaseModel):
+    question: str
+    session_id: Optional[str] = None
+
+
+class ArticleAskResponse(BaseModel):
+    article_id: int
+    question: str
+    answer: str
+    cited_sentences: List[int] = []
+    grounded: bool = True
+

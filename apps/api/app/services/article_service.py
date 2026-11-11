@@ -429,3 +429,116 @@ class ArticleService:
         db.add(job)
         db.commit()
         return True, job.id
+
+    @staticmethod
+    def answer_question(db: Session, article_id: int, question: str) -> Optional[dict]:
+        """Answers questions about an article strictly grounded in translated sentences."""
+        article = db.query(Article).filter(Article.id == article_id).first()
+        if not article:
+            return None
+
+        # Fetch active translation sentences
+        active_translation = db.query(Translation).filter(
+            Translation.article_id == article_id,
+            Translation.is_active == True
+        ).first()
+
+        sentences_text = []
+        if active_translation:
+            for st in active_translation.sentence_translations:
+                s_idx = st.sentence.idx if st.sentence else 0
+                sentences_text.append(f"[S{s_idx}] {st.text_en}")
+
+        if not sentences_text:
+            for s in article.sentences:
+                sentences_text.append(f"[S{s.idx}] {s.text_kn}")
+
+        if not sentences_text:
+            return {
+                "article_id": article_id,
+                "question": question,
+                "answer": "Article content is not yet available for question answering.",
+                "cited_sentences": [],
+                "grounded": False
+            }
+
+        joined_sentences = "\n".join(sentences_text)
+
+        from app.config import settings
+        api_key = settings.GEMINI_API_KEY
+        model_name = settings.GEMINI_MODEL or "gemini-3-flash-preview"
+
+        system_instruction = (
+            "You are a strictly grounded AI news assistant. Answer the user's question using ONLY the provided numbered sentences.\n"
+            "Rules:\n"
+            "1. State facts directly and concisely in 1-3 sentences.\n"
+            "2. Whenever you state a claim or fact, cite the sentence index in brackets like [S0] or [S2].\n"
+            "3. If the answer is NOT explicitly stated in the provided text, respond: 'The article does not contain information to answer this question.'\n"
+            "4. Return valid JSON only with keys: 'answer' (string with citations) and 'cited_sentences' (array of integer indices)."
+        )
+
+        prompt = f"{system_instruction}\n\nArticle Sentences:\n{joined_sentences}\n\nUser Question:\n{question.strip()}"
+
+        # Try Gemini API
+        if api_key:
+            import urllib.request, json, re
+            for m in [model_name, "gemini-3-flash-preview", "gemini-3.1-flash-lite", "gemini-2.5-flash"]:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
+                payload = {
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        "temperature": 0.1,
+                        "responseMimeType": "application/json"
+                    }
+                }
+                try:
+                    req = urllib.request.Request(
+                        url,
+                        data=json.dumps(payload).encode("utf-8"),
+                        headers={"Content-Type": "application/json"}
+                    )
+                    with urllib.request.urlopen(req, timeout=12) as resp:
+                        resp_data = json.loads(resp.read().decode("utf-8"))
+                        raw_text = resp_data["candidates"][0]["content"]["parts"][0]["text"]
+                        clean_json = raw_text.strip()
+                        if clean_json.startswith("```"):
+                            clean_json = re.sub(r"^```[a-zA-Z]*\n?", "", clean_json)
+                            clean_json = re.sub(r"\n?```$", "", clean_json)
+                        parsed = json.loads(clean_json)
+                        return {
+                            "article_id": article_id,
+                            "question": question,
+                            "answer": parsed.get("answer", "No answer generated."),
+                            "cited_sentences": parsed.get("cited_sentences", []),
+                            "grounded": True
+                        }
+                except Exception as e:
+                    continue
+
+        # Extractive fallback
+        q_lower = question.lower()
+        matched = []
+        for idx, s in enumerate(sentences_text):
+            words = [w for w in q_lower.split() if len(w) > 3]
+            if any(w in s.lower() for w in words):
+                matched.append((idx, s))
+
+        if matched:
+            cited = [m[0] for m in matched[:2]]
+            ans = " ".join([f"{m[1].split('] ', 1)[-1]} [S{m[0]}]" for m in matched[:2]])
+            return {
+                "article_id": article_id,
+                "question": question,
+                "answer": ans,
+                "cited_sentences": cited,
+                "grounded": True
+            }
+
+        return {
+            "article_id": article_id,
+            "question": question,
+            "answer": "The article does not contain specific information regarding this question.",
+            "cited_sentences": [],
+            "grounded": False
+        }
+
