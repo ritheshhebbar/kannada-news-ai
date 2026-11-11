@@ -396,3 +396,4 @@ For empirical research and project reports, the codebase provides evaluation sca
 - **No Full Republishing**: The system displays short excerpts, translated sentences, and links back to the original publisher URL.
 - **Clear AI Labelling**: All generated content is prominently badged as *"Machine Translation"* and *"AI-Generated Summary"*.
 - **Privacy First**: User-submitted texts are stored locally in the session and are never used to train external public models.
+
