@@ -1,0 +1,373 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+% Packages
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{url}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+
+% Table column definitions for tabularx
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcolumntype{s}{>{\hsize=.35\hsize\raggedright\arraybackslash}X}
+\newcolumntype{m}{>{\hsize=.8\hsize\raggedright\arraybackslash}X}
+\newcolumntype{b}{>{\hsize=1.2\hsize\raggedright\arraybackslash}X}
+
+\begin{document}
+
+\title{AI-Powered News Translation from Kannada to English: A Grounded Translate-Then-Summarize Architecture with Quality Guardrails}
+
+\author{
+\IEEEauthorblockN{K S Rithesh Hebbar}
+\IEEEauthorblockA{\textit{Dept. of Information Science and Engineering} \\
+\textit{M. S. Ramaiah Institute of Technology}\\
+Bengaluru, Karnataka, India \\
+USN: 1MS23IS049}
+\and
+\IEEEauthorblockN{Divvela Srihari}
+\IEEEauthorblockA{\textit{Dept. of Information Science and Engineering} \\
+\textit{M. S. Ramaiah Institute of Technology}\\
+Bengaluru, Karnataka, India \\
+USN: 1MS23IS039}
+\and
+\IEEEauthorblockN{K Manjunath}
+\IEEEauthorblockA{\textit{Dept. of Information Science and Engineering} \\
+\textit{M. S. Ramaiah Institute of Technology}\\
+Bengaluru, Karnataka, India \\
+USN: 1MS23IS048}
+}
+
+\maketitle
+
+\begin{abstract}
+Language barriers severely restrict access to regional information ecosystems in multilingual societies. In Karnataka, India, critical socio-political, economic, and regional developments are published predominantly in Kannada across traditional print, e-papers, official gazettes, and digital news outlets. Non-native residents, administrative officials, and national researchers frequently encounter significant challenges in comprehending these publications. Traditional machine translation (MT) models struggle with Kannada due to its Dravidian agglutinative root morphology, complex compound words (\textit{sandhi} and \textit{samasa}), Subject-Object-Verb (SOV) syntax, and severe scarcity of clean parallel bitext. Furthermore, contemporary Large Language Models (LLMs) applied end-to-end exhibit severe hallucinations, named-entity distortions, and catastrophic meaning shifts when processing regional vernacular texts. 
+
+This paper proposes an end-to-end, verified AI-powered system designed specifically for Kannada-to-English news translation, grounded summarization, and interactive consumption. We introduce a novel ``Translate-Then-Summarize'' architectural paradigm that decouples sentence-level translation fidelity from abstractive synthesis. The system integrates a multi-modal ingestion pipeline that supports live automated crawling across eight premier Kannada digital publications (including Prajavani, Vijay Karnataka, Kannada Prabha, and Udayavani), digital PDF documents, and optical character recognition (OCR) of e-paper clippings. Translation is performed at a granular sentence level using specialized multilingual models (IndicTrans2) with fallback pathways, preserving strict $1$-to-$1$ bidirectional alignments. To guarantee linguistic fidelity, we formulate a multi-tiered Quality Estimation (QE) guardrail verifying length ratios, numeric/date preservation, and cross-lingual semantic similarity via Language-Agnostic BERT Sentence Embeddings (LaBSE). Grounded abstractive summarization is enforced via closed-book in-context prompting that binds every synthesized claim to explicit source sentence evidence indices ($[S_i]$), backed by an automated extractive fallback upon hallucination detection. The resulting architecture ensures full factual provenance, interactive side-by-side reading, instant sentence-synchronized audio briefing, and verifiable question answering.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Kannada-to-English Translation, Neural Machine Translation, IndicTrans2, Translate-Then-Summarize, Low-Resource NLP, Grounded Summarization, Dravidian Linguistics, Quality Estimation.
+\end{IEEEkeywords}
+
+% -----------------------------------------------------------------------------
+% SECTION I: INTRODUCTION
+% -----------------------------------------------------------------------------
+\section{Introduction}
+\label{sec:introduction}
+
+In the contemporary digital era, timely and accurate dissemination of journalistic information is vital for an informed citizenry, public governance, and socio-economic integration. In India, a considerable proportion of news reporting is generated, curated, and broadcast in regional vernacular languages. Kannada, a classical Dravidian language spoken by upwards of 50 million individuals predominantly in Karnataka, possesses a sophisticated and prolific journalistic landscape. Daily news reports published by leading publications such as \textit{Prajavani}, \textit{Vijay Karnataka}, \textit{Kannada Prabha}, and \textit{Udayavani} provide comprehensive coverage of regional governance, grassroots developments, state legislation, agrarian conditions, and cultural events.
+
+However, non-Kannada speaking citizens, interstate migrants, administrative personnel, policymakers, and international researchers face an acute language barrier. Although English operates as the principal lingua franca for commerce and higher administration across India, a substantial information disconnect persists between regional vernacular reporting and English-centric consumers. Automated Machine Translation (MT) systems capable of bridging this divide are essential to ensure linguistic inclusivity and broad access to vital public interest information.
+
+\subsection{Linguistic Complexity of Kannada}
+The computational automation of Kannada-to-English translation presents fundamental linguistic challenges that differentiate it from Western European language pairs:
+\begin{enumerate}
+    \item \textbf{Agglutinative Morphology:} Kannada is heavily agglutinative and morphologically rich. Prefixes and multiple case suffixes (vibhakti pratyaya) attach sequentially to root stems to denote grammatical categories such as tense, aspect, mood, gender, number, and case. A single polysynthetic Kannada word often conveys an entire prepositional phrase or subordinate clause in English.
+    \item \textbf{Syntactic Word Order Mismatch:} Kannada adheres strictly to a head-final, Subject-Object-Verb (SOV) grammatical structure, contrasting sharply with the head-initial Subject-Verb-Object (SVO) typography of English. Translating long, complex news sentences requires extensive non-local syntactic reordering across long-range token distances.
+    \item \textbf{Morphophonemic Compounding (\textit{Sandhi} and \textit{Samasa}):} Journalistic Kannada extensively incorporates morphophonemic combinations where adjacent words fuse phonetically and semantically. Tokenizers lacking native Kannada vocabulary segment these compounds into arbitrary subword fragments, degrading semantic representation.
+    \item \textbf{Resource Asymmetry:} Despite its demographic size, Kannada remains underrepresented in open parallel corpora compared to English, Hindi, or French. High-quality, domain-specific news bitext remains scarce.
+\end{enumerate}
+
+\subsection{The News Translation Dilemma: Fidelity vs. Hallucination}
+Recent developments in Generative Artificial Intelligence and Large Language Models (LLMs) have demonstrated impressive fluency in text generation. However, applying unconstrained LLMs directly to vernacular news translation and summarization reveals critical vulnerabilities:
+\begin{itemize}
+    \item \textbf{Catastrophic Hallucination:} Generative models frequently introduce plausible-sounding yet completely ungrounded facts, false attributions, or phantom events when translating low-resource languages. In journalistic contexts, such hallucinations lead to misinformation.
+    \item \textbf{Named-Entity Distortion:} Localized named entities—such as taluk and village names, local political designations, state administrative schemes, and regional surnames—are routinely mistranslated, dropped, or transliterated erroneously.
+    \item \textbf{Loss of Factual Traceability:} Black-box generation merges translation, abstraction, and inference into a single opaque step, depriving the reader of the ability to verify claims against the original source prose.
+\end{itemize}
+
+\subsection{Proposed Solution: Verified Translate-Then-Summarize}
+To resolve this dilemma, this research develops a structured, modular system grounded in a \textit{Translate-Then-Summarize} architectural paradigm. Rather than delegating the entire task to a single generative model, our methodology decomposes the pipeline into transparent, verifiable stages:
+\begin{enumerate}
+    \item \textbf{Sentence-Aligned Translation:} The Kannada source article is normalized and segmented into discrete sentence units. Each sentence is independently translated into English using specialized Indic Neural Machine Translation models (IndicTrans2) with adaptive failovers, maintaining strict $1$-to-$1$ bidirectional mapping.
+    \item \textbf{Multi-Tier Quality Estimation (QE):} Every translated sentence pair is audited by automated verification guardrails that evaluate token length bounds, numeric invariant preservation, and semantic embedding similarity via LaBSE.
+    \item \textbf{Grounded Abstractive Summarization:} Using the translated sentences as an explicit, closed-book reference context $[S_0], [S_1], \dots, [S_{N-1}]$, an LLM generates a structured executive briefing. Crucially, each summary bullet and key fact is programmatically bound to specific source sentence citation indices.
+    \item \textbf{Faithfulness Audit and Extractive Fallback:} A verification engine verifies every cited claim against its indexed evidence sentence. If ungrounded assertions or hallucination flags are detected, the system automatically falls back to an extractive lexical summarizer.
+    \item \textbf{Multi-Modal Ingestion and Accessibility:} The system incorporates live RSS/Sitemap crawlers for major regional newspapers, a digital/scanned PDF ingestion engine, an e-paper Vision OCR extractor, sentence-synchronized Text-to-Speech (TTS) audio briefings, and an interactive ``Ask the Article'' grounded Q\&A chatbot.
+\end{enumerate}
+
+The remainder of this paper is organized as follows: Section~\ref{sec:literature_review} presents a comprehensive literature review of ten seminal works spanning neural machine translation, Indic NLP, evaluation benchmarks, and LLM translation, concluding with a multi-column comparative matrix highlighting limitations and addressed research gaps. Section~\ref{sec:methodology} delineates the proposed system architecture, mathematical formulations, quality guardrails, and algorithmic pipeline.
+
+% -----------------------------------------------------------------------------
+% SECTION II: LITERATURE REVIEW
+% -----------------------------------------------------------------------------
+\section{Literature Review}
+\label{sec:literature_review}
+
+The realization of an automated Kannada-to-English news translation and summarization system builds upon advances across five major research domains: foundational neural machine translation architectures, low-resource transfer learning, Indic-specific corpora and models, automated evaluation metrics, and the application of large language models to translation tasks. This section reviews ten seminal publications that establish the academic background of this investigation.
+
+\subsection{Foundations and Low-Resource Translation}
+The sequence-to-sequence paradigm in natural language processing was revolutionized by Vaswani et al.~\cite{vaswani2017attention}, who proposed the \textbf{Transformer} architecture. Departing from earlier Recurrent Neural Networks (RNNs) and Long Short-Term Memory (LSTM) networks that relied on sequential recurrence, the Transformer relies entirely on self-attention mechanisms to compute representations of input and output sequences. The multi-head attention mechanism permits the model to relate tokens across arbitrary distances in constant computational steps, facilitating the capture of syntactic dependencies. For Kannada-to-English translation, this self-attention formulation is critical: because Kannada is strictly SOV and English is SVO, verbs that appear at the termination of Kannada clauses must be linked to subjects positioned at the sentence onset. However, standard Transformer models trained from scratch require tens of millions of sentence pairs to generalize effectively, rendering them inadequate when applied directly to isolated low-resource language pairs without extensive pretraining.
+
+Haddow et al.~\cite{haddow2022survey} conducted an exhaustive survey on \textbf{low-resource machine translation}, framing the fundamental bottlenecks that afflict languages lacking extensive parallel corpora. The authors categorize the low-resource challenge into data scarcity, domain discrepancy, and linguistic complexity. They analyze established mitigation techniques, including iterative back-translation, synthetic parallel bitext mining from monolingual web crawls, unsupervised pretraining, and cross-lingual multilingual transfer. Haddow et al. emphasize that for morphologically complex and under-resourced languages, training monolingual models is statistically inefficient; instead, transfer from linguistically related languages within a shared multilingual latent space yields substantial performance dividends. Their findings substantiate our decision to avoid training an isolated bilingual model from scratch, motivating instead the deployment of multilingual pretrained representations adapted to the Indic linguistic landscape.
+
+\subsection{Multilingual Pretraining and Massively Multilingual Architectures}
+To overcome data scarcity in individual language directions, sequence-to-sequence pretraining over massive multilingual corpora emerged as a dominant paradigm. Liu et al.~\cite{liu2020multilingual} introduced \textbf{mBART}, a multilingual sequence-to-sequence denoising autoencoder. Pretrained on the CC25 corpus spanning 25 languages using sentence permutation and text infilling objectives, mBART established that self-supervised denoising pretraining produces dramatic translation gains for low-resource pairs when fine-tuned on limited downstream parallel data. Tang et al.~\cite{tang2020multilingual} expanded this framework to \textbf{mBART-50} by incorporating incremental multilingual continual pretraining across 50 languages, demonstrating effective many-to-many translation without requiring English as an intermediate pivot. However, a major limitation of both mBART and mBART-50 in the context of our investigation is the complete omission of Kannada from their pretraining corpora. As a consequence, their vocabulary representations lack Kannada script tokens, rendering them directly unusable for native Kannada translation without extensive secondary vocabulary adaptation.
+
+Addressing scale on a global level, the NLLB Team~\cite{nllb2024scaling} introduced \textbf{No Language Left Behind (NLLB-200)}, scaling neural machine translation to over 200 distinct languages. Their architecture utilizes a sparsely-gated Mixture-of-Experts (MoE) network combined with massive parallel data mining via LASER3 encoders. NLLB-200 provides native support for Kannada and substantially advanced low-resource translation quality, evaluated on their multi-way parallel benchmark FLORES-200. Despite its benchmark achievements, NLLB-200 exhibits practical drawbacks in production news deployments: the model's massive parameter footprint (ranging from 3.3 billion to 54 billion parameters) imposes severe inference latency and GPU memory requirements. Furthermore, its general-domain mining pipeline frequently introduces hallucinated tokens, drops low-frequency regional entities, and produces grammatical artifacts when confronted with localized journalistic phrasing.
+
+\subsection{Indic-Specific NLP Resources and Dedicated Models}
+Recognizing the structural deficiencies of generic multilingual models on South Asian languages, dedicated research initiatives have focused on cultivating Indic-centric linguistic resources. Ramesh et al.~\cite{ramesh2022samanantar} created \textbf{Samanantar}, the largest publicly available parallel corpus collection for 11 Indic languages paired with English. Through automated extraction from multilingual websites, document alignment, sentence filtering, and back-translation, Samanantar compiled 49.7 million parallel sentence pairs, including over 4 million clean Kannada-English pairs. Their experiments demonstrated that models trained on Indic-centric curated data significantly outperform generic global models like mBART and Google Translate across Indic benchmarks. Samanantar demonstrated that high-quality, in-domain parallel sentence data is the single most critical factor in overcoming morphological under-representation in Kannada NLP.
+
+Building upon Samanantar and expanded corpora, Gala et al.~\cite{gala2023indictrans2} developed \textbf{IndicTrans2}, the state-of-the-art open-source translation model covering all 22 officially scheduled Indian languages. IndicTrans2 introduced the Bharat Parallel Corpus Collection (BPCC) and established the IN22 benchmark. Crucially, IndicTrans2 addresses Indic linguistic realities through script unification (Devanagari mapping for shared linguistic transfer across Indo-Aryan and Dravidian roots) and specialized subword tokenization that prevents excessive segmentation of morphologically agglutinated words. Gala et al. demonstrated that IndicTrans2 achieves higher human and automatic metric ratings across Indic languages than commercial baselines while operating at an efficient 1-billion parameter scale. However, IndicTrans2 remains purely a translation model: it lacks native mechanisms for automated document ingestion, headline normalization, hallucination detection, summarization, and interactive consumption.
+
+\subsection{Evaluation Benchmarks and Neural Quality Metrics}
+The rigorous assessment of translation systems requires standardized benchmarks and semantically sensitive metrics. Goyal et al.~\cite{goyal2022flores} constructed \textbf{FLORES-101}, a multi-way parallel evaluation benchmark spanning 101 languages. Comprising 3,010 sentences extracted from Wikipedia and professionally translated, FLORES-101 provided the first strictly comparable evaluation set for assessing zero-shot and multilingual performance across diverse language families, including Kannada. Nevertheless, FLORES-101 is exclusively general-domain and educational in nature. It lacks the colloquial named entities, rapidly shifting topical terminology, abbreviated idioms, and unique syntactic structures characteristic of daily regional journalism.
+
+In parallel, the evaluation of translation quality has evolved beyond surface-level n-gram overlap metrics such as BLEU and chrF++. Rei et al.~\cite{rei2020comet} proposed \textbf{COMET} (Crosslingual Optimized Metric for Evaluation of Translation), a neural evaluation framework built upon pretrained multilingual encoders (XLM-RoBERTa). COMET is trained directly on human judgment data from WMT Metrics Shared Tasks to predict human quality ratings (Direct Assessment and Multidimensional Quality Metrics) by jointly encoding the source sentence, hypothesis translation, and reference translation. COMET exhibits substantially higher correlation with professional human evaluators than n-gram metrics, particularly for morphologically rich languages where surface word forms differ despite semantic congruence. However, COMET functions as a post-hoc reference-based evaluation metric; it requires pre-existing reference translations and is too computationally heavy to operate as a low-latency, real-time quality guardrail inside an interactive news pipeline.
+
+\subsection{Large Language Models in Machine Translation}
+The recent emergence of massive generative models has prompted rigorous investigation into their MT capabilities. Hendy et al.~\cite{hendy2023gpt} conducted an extensive empirical evaluation of \textbf{GPT models} (including GPT-3.5 and GPT-4) across 18 translation directions. Their findings reveal a pronounced dichotomy: while GPT models achieve state-of-the-art performance on high-resource, English-centric language pairs, their translation quality degrades significantly on low-resource and non-Latin script languages. For low-resource languages, GPT models suffer from subword over-fragmentation, hallucinations, omission of critical facts, and inconsistent syntactic agreement. Hendy et al. concluded that dedicated, domain-adapted neural machine translation models (such as IndicTrans2) remain distinctly superior to unconstrained LLMs for low-resource translation. However, they observed that LLMs excel in post-editing, monolingual refinement, and semantic summarization when provided with clean translated text.
+
+% -----------------------------------------------------------------------------
+% TABLE I: EXTENDED COMPARATIVE LITERATURE REVIEW MATRIX
+% -----------------------------------------------------------------------------
+\begin{table*}[t]
+\caption{Comprehensive Comparison of Reviewed Literature: Methodologies, Scope, Strengths, Drawbacks, and Addressed Gaps}
+\label{tab:literature_review}
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{} c s m m b b @{}}
+\toprule
+\textbf{Ref.} & \textbf{Author(s) \& Year} & \textbf{Architecture / Technique} & \textbf{Language Scope \& Datasets} & \textbf{Key Strengths \& Contributions} & \textbf{Limitations \& Drawbacks} \\
+\midrule
+
+\cite{vaswani2017attention} & Vaswani et al. (2017) & Multi-Head Self-Attention Seq2Seq Transformer & WMT14 En-De (4.5M) and En-Fr (36M) & Eliminates recurrence; parallel training; models long-range syntax effectively & Quadratic memory $O(N^2)$; high data hunger; severely overfits on low-resource Kannada without pretraining \\
+\addlinespace[0.5ex]
+
+\cite{haddow2022survey} & Haddow et al. (2022) & Comprehensive Survey of Low-Resource MT & Global low-resource and underrepresented pairs & Establishes taxonomy of bitext mining, back-translation, and multilingual transfer & Methodological survey only; lacks production architecture or Kannada-specific empirical pipeline \\
+\addlinespace[0.5ex]
+
+\cite{liu2020multilingual} & Liu et al. (2020) & Multilingual Denoising Seq2Seq (mBART) & CC25 corpus (25 languages, Common Crawl) & Pretrain-then-finetune paradigm yields large gains on resource-constrained pairs & \textbf{Kannada completely omitted} from pretraining; unable to process Kannada script without tokenizer surgery \\
+\addlinespace[0.5ex]
+
+\cite{tang2020multilingual} & Tang et al. (2020) & Incremental Continual Pretraining (mBART-50) & ML50 multilingual benchmark (50 languages) & Direct many-to-many translation without English pivot; robust multilingual transfer & \textbf{Kannada omitted} from the 50 languages; tokenizer lacks Kannada subword representations \\
+\addlinespace[0.5ex]
+
+\cite{nllb2024scaling} & NLLB Team (2024) & Sparsely-Gated Mixture-of-Experts (NLLB-200) & 200 languages; mined web corpora; FLORES-200 & Massive language coverage; native Kannada support; high benchmark BLEU/chrF++ & High inference latency; heavy parameter size ($>$3B); prone to named-entity drift and hallucinations in regional news \\
+\addlinespace[0.5ex]
+
+\cite{ramesh2022samanantar} & Ramesh et al. (2022) & Automated Parallel Bitext Mining (Samanantar) & 11 Indic languages + English (49.7M pairs) & Largest open parallel Indic dataset; 4M+ clean Kannada-English sentence pairs & Web-crawled noise; general domain; high domain gap when applied to localized regional journalism and headlines \\
+\addlinespace[0.5ex]
+
+\cite{gala2023indictrans2} & Gala et al. (2023) & Indic Pretrained Encoder-Decoder (IndicTrans2) & All 22 scheduled Indian languages (BPCC, IN22) & SOTA translation on Indic languages; script unification; native Dravidian tokenization & Pure translation model; lacks automated news ingestion, quality guardrails, summarization, and verifiable citations \\
+\addlinespace[0.5ex]
+
+\cite{goyal2022flores} & Goyal et al. (2022) & Multi-Way Parallel Evaluation (FLORES-101) & 101 languages, 3010 translated sentences & High-quality professional translations; strict multi-way comparability & Limited to Wikipedia domain; completely lacks journalistic syntax, dynamic political jargon, and breaking news style \\
+\addlinespace[0.5ex]
+
+\cite{rei2020comet} & Rei et al. (2020) & Cross-Lingual Metric Predictor (COMET) & WMT Metrics Shared Task human datasets & Superior correlation with human judgments; evaluates semantic adequacy beyond n-grams & Requires gold-standard reference translations; high computational overhead; unsuitable for real-time inference guardrails \\
+\addlinespace[0.5ex]
+
+\cite{hendy2023gpt} & Hendy et al. (2023) & Prompt-Based In-Context Learning (GPT-3.5/GPT-4) & 18 translation directions across diverse tiers & Competitive on high-resource pairs; strong fluency, post-editing, and abstractive synthesis & Frequent hallucinations on low-resource Indic languages; drops named entities; lacks sentence alignment traceability \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+\subsection{Identified Research Gaps}
+A critical synthesis of the reviewed literature reveals several prominent research gaps that directly hinder the deployment of automated translation for Kannada news:
+\begin{enumerate}
+    \item \textbf{General Domain vs. Journalistic Domain Mismatch:} Existing Indic benchmarks (FLORES-101~\cite{goyal2022flores}, FLORES-200~\cite{nllb2024scaling}) are derived from Wikipedia articles and curated literature. They fail to reflect the syntactic idiosyncrasies of Kannada journalism—such as sensational headlines lacking explicit verbs, complex legal and political terminology, taluk-level regional entities, and acronym-dense administrative prose.
+    \item \textbf{The Direct LLM Hallucination Vulnerability:} While Hendy et al.~\cite{hendy2023gpt} confirm the generative prowess of LLMs, unconstrained end-to-end LLM translation of low-resource vernacular languages is plagued by factual drift and hallucination. No existing open system enforces strict sentence-aligned verification between Kannada source prose and English summaries.
+    \item \textbf{Absence of Real-Time, Reference-Free Quality Guardrails:} Existing evaluation metrics such as COMET~\cite{rei2020comet} and BLEU require pre-existing reference translations, making them incapable of auditing live, newly published articles. There is a glaring need for automated, reference-free Quality Estimation (QE) guardrails that operate dynamically during news ingestion.
+    \item \textbf{Fragmented Multi-Modal Ingestion:} Regional news does not exist solely in clean, plain text. Substantial volumes of breaking news and official government announcements are published as scanned PDFs, e-paper digital facsimiles, or digital articles across dynamic web portals protected by proprietary content delivery networks. Existing MT research presupposes clean input text, omitting the ingestion and normalization infrastructure required for live operation.
+\end{enumerate}
+
+Our research directly bridges these gaps by constructing an integrated, verified architecture that unifies multi-modal ingestion, sentence-level aligned translation, automated quality estimation, grounded abstractive summarization, and multimodal accessibility.
+
+% -----------------------------------------------------------------------------
+% SECTION III: PROPOSED METHODOLOGY
+% -----------------------------------------------------------------------------
+\section{Proposed Methodology}
+\label{sec:methodology}
+
+The proposed system addresses the limitations of unconstrained generative models by implementing a multi-stage, modular \textit{Translate-Then-Summarize} pipeline fortified with multi-tiered quality guardrails.
+
+\subsection{Overall System Architecture}
+The system architecture comprises five tightly decoupled sub-systems:
+\begin{enumerate}
+    \item \textbf{Multi-Modal Ingestion Engine:} Ingests Kannada news from live RSS feeds, XML News Sitemaps, digital/scanned PDFs, and e-paper image clippings.
+    \item \textbf{Linguistic Preprocessing \& Segmentation:} Performs Unicode canonical normalization, noise filtration, and Sentence Boundary Detection (SBD).
+    \item \textbf{Sentence-Aligned Translation Engine:} Executes sentence-by-sentence neural translation with $1$-to-$1$ bidirectional mapping and graceful failover.
+    \item \textbf{Quality Estimation (QE) \& Hallucination Guardrails:} Audits sentence translations using length bounds, numeric invariant tracking, and cross-lingual semantic similarity.
+    \item \textbf{Grounded Summarization \& Verifiable Presentation:} Produces evidence-attributed summaries, powers an interactive dual-reader, enables sentence-synchronized TTS briefings, and facilitates grounded Q\&A.
+\end{enumerate}
+
+\subsection{Multi-Modal Ingestion Engine}
+To accommodate the diverse formats in which regional news is published across Karnataka, the ingestion layer provides three specialized pipelines:
+
+\subsubsection{Automated RSS and XML News Sitemap Aggregator}
+The aggregator connects to eight premier Kannada news outlets, categorized into standard RSS feeds and XML Google News sitemaps:
+\begin{itemize}
+    \item \textbf{Direct RSS Feeds:} \textit{Prajavani}, \textit{Vijay Karnataka}, \textit{News18 Kannada}, \textit{Asianet News Kannada}, and \textit{Times Now Kannada}.
+    \item \textbf{XML News Sitemaps:} \textit{Kannada Prabha} (via dynamic news sitemaps containing Google News XML tags) and \textit{Udayavani} (via monthly hierarchical XML indexes).
+    \item \textbf{Single-Page Application (SPA) Dynamic Asset Extractor:} Certain modern portals (e.g., \textit{Udayavani}) render content dynamically on the client side via Content Delivery Networks (CDNs). The aggregator detects CDN JSON endpoints embedded in Next.js payloads (e.g., \texttt{/test-news/news-json/*.json}), fetching raw story objects and stripping styling markup to recover the clean source text.
+\end{itemize}
+All outgoing requests enforce compliance with \texttt{robots.txt} policies and integrate randomized exponential backoff to ensure ethical web scraping.
+
+\subsubsection{Digital and Scanned PDF Ingestion Engine}
+For official government orders, state gazettes, and press releases distributed as PDF documents, the ingestion module utilizes a dual-path extractor:
+\begin{itemize}
+    \item \textbf{Digital Extraction:} Native text streams are parsed page-by-page using \texttt{pypdf}. Whitespace, running headers, and pagination footers are algorithmically removed.
+    \item \textbf{Image Fallback Extraction:} If the digital character yield is below a predefined threshold ($\text{len}(text) < 60$), the document is identified as a scanned facsimile. The system extracts embedded page raster images and routes them to the Vision OCR pipeline.
+\end{itemize}
+
+\subsubsection{E-Paper and News Screenshot Vision OCR Engine}
+Physical newspaper clippings, cropped digital e-paper columns, and smartphone news screenshots are processed using specialized multimodal vision encoders. The raw image is normalized, base64-encoded, and ingested by Gemini Vision models with a strict domain-specific system prompt directing the model to transcribe Kannada Unicode text verbatim while preserving paragraph hierarchy and eliminating extraneous advertisement text.
+
+\subsection{Linguistic Preprocessing and Sentence Boundary Detection}
+Raw Kannada text extracted from diverse sources contains typographical inconsistencies, non-standard diacritics, and irregular punctuation. The preprocessing layer executes:
+\begin{enumerate}
+    \item \textbf{Unicode Normalization:} Kannada script representations are normalized to Unicode Canonical Decomposition followed by Canonical Composition (NFC), resolving inconsistent encodings of Kannada vowel signs (e.g., \textit{ottu} forms and dependent vowel signs like \textit{dirgha}).
+    \item \textbf{Boilerplate and Ad Filtration:} A regex-based domain filter purges ubiquitous news artifacts, including subscription appeals (``\textit{Chandaa daaranagi}''), social media sharing prompts (``\textit{Follow maadi}''), advertisement placeholders (``\textit{Jaahiraatu}''), and reporter bylines.
+    \item \textbf{Predominant Script Verification:} To prevent processing corrupt inputs, a script ratio metric calculates:
+    \begin{equation}
+        \mathcal{R}_{kn} = \frac{\sum_{c \in T} \mathbb{I}(0x0C80 \le \text{ord}(c) \le 0x0CFF)}{\sum_{c \in T} \mathbb{I}(c \in \text{Alphabetic})}
+        \label{eq:script_ratio}
+    \end{equation}
+    where $T$ represents the input character sequence. Articles with $\mathcal{R}_{kn} < 0.40$ are rejected.
+    \item \textbf{Sentence Boundary Detection (SBD):} Kannada journalistic text employs both Western punctuation (periods, question marks) and traditional Indic punctuation (\textit{danda} U+0964, \textit{double danda} U+0965). The SBD algorithm splits text across these boundaries while guarding against false splits on abbreviated honorifics (e.g., \textit{Dr.}, \textit{Shri.}) and numeric decimals:
+    \begin{equation}
+        S_{kn} = \{s_0^{kn}, s_1^{kn}, s_2^{kn}, \dots, s_{N-1}^{kn}\}
+        \label{eq:sentence_set}
+    \end{equation}
+\end{enumerate}
+
+\subsection{Sentence-Level Neural Translation and Alignment}
+Rather than submitting an entire news article as an unconstrained monolithic block, the translation engine operates strictly over the ordered sentence sequence $S_{kn}$. This guarantees fine-grained sentence alignment and prevents the omission or hallucination of complete paragraphs.
+
+Let $f_{\theta}: \mathcal{X}_{kn} \to \mathcal{Y}_{en}$ denote the neural translation mapping parameterized by weights $\theta$. For each source sentence $s_i^{kn} \in S_{kn}$, the engine generates:
+\begin{equation}
+    s_i^{en} = f_{\theta}(s_i^{kn}) \quad \forall i \in \{0, 1, \dots, N-1\}
+    \label{eq:sentence_translation}
+\end{equation}
+The primary model utilized is \textbf{IndicTrans2} (1B parameter Indic-to-English variant), which incorporates specialized tokenizers tailored to Dravidian morphophonemic structures. 
+
+To guarantee high availability and prevent rate-limiting during bulk ingestion, the system implements an automated \textbf{Multi-Tier Failover Architecture}:
+\begin{itemize}
+    \item \textbf{Tier 1 (Specialized Indic MT):} IndicTrans2 executed locally or via dedicated inference endpoints.
+    \item \textbf{Tier 2 (Batch Generative MT):} High-speed multimodal LLMs (\texttt{gemini-3.1-flash-lite} / \texttt{gemini-3-flash-preview}) queried with a strict array-preserving batch translation prompt.
+    \item \textbf{Tier 3 (Web NMT Fallback):} Google Translate web endpoint executed sentence-by-sentence with exponential backoff.
+\end{itemize}
+Regardless of the active tier, the output preserves an invariant $1$-to-$1$ bijection between $s_i^{kn}$ and $s_i^{en}$.
+
+\subsection{Quality Estimation and Hallucination Guardrails}
+Each translated sentence pair $(s_i^{kn}, s_i^{en})$ is immediately subjected to four reference-free Quality Estimation (QE) guardrails:
+
+\subsubsection{Token Length Ratio Guard}
+Because Kannada is morphologically agglutinative and English is analytic, the ratio of English target tokens to Kannada source tokens adheres to a well-defined statistical distribution:
+\begin{equation}
+    \gamma_{len}(s_i) = \frac{|\text{Tokens}_{en}(s_i^{en})|}{|\text{Tokens}_{kn}(s_i^{kn})|}
+    \label{eq:length_ratio}
+\end{equation}
+Under normal translation, $1.1 \le \gamma_{len} \le 2.6$. If $\gamma_{len} < 0.60$ (indicating severe under-translation or sentence truncation) or $\gamma_{len} > 3.80$ (indicating runaway degenerative repetition or hallucination), a flag $\mathcal{F}_{length}$ is raised.
+
+\subsubsection{Numeric and Date Invariant Preserver}
+News journalism depends fundamentally on numeric precision (casualties, financial figures, dates, legislative bill numbers). Let $\mathcal{N}(s)$ denote the set of numeric entities extracted from sentence $s$:
+\begin{equation}
+    \mathcal{N}_{kn}(s_i^{kn}) \longleftrightarrow \mathcal{N}_{en}(s_i^{en})
+    \label{eq:numeric_preservation}
+\end{equation}
+The guard converts all Kannada numerals (U+0CE6 to U+0CEF: ೦, ೧, ೨, ೩, ೪, ೫, ೬, ೭, ೮, ೯) to standard ASCII Arabic digits and verifies set equivalence. If $\mathcal{N}_{kn} \setminus \mathcal{N}_{en} \ne \emptyset$, a numeric distortion flag $\mathcal{F}_{num}$ is recorded.
+
+\subsubsection{Named-Entity and Transliteration Audit}
+High-frequency regional named entities $\mathcal{E}$ (e.g., proper nouns, political figures, geographic locations) are extracted using a rule-assisted Named Entity Recognizer. The guard confirms that for every entity $e \in \mathcal{E}_{kn}$, its corresponding English phoneme/transliteration appears in $s_i^{en}$.
+
+\subsubsection{Cross-Lingual Semantic Similarity via LaBSE}
+To verify semantic adequacy without reference translations, both sentences are projected into a common 768-dimensional multilingual vector space using Language-Agnostic BERT Sentence Embeddings (LaBSE)~\cite{feng2022language}:
+\begin{equation}
+    \mathbf{v}_{kn} = \text{LaBSE}(s_i^{kn}), \quad \mathbf{v}_{en} = \text{LaBSE}(s_i^{en})
+    \label{eq:labse_embeddings}
+\end{equation}
+The semantic alignment score is computed via cosine similarity:
+\begin{equation}
+    \mathcal{S}_{sim}(s_i^{kn}, s_i^{en}) = \frac{\mathbf{v}_{kn} \cdot \mathbf{v}_{en}}{\|\mathbf{v}_{kn}\|_2 \|\mathbf{v}_{en}\|_2}
+    \label{eq:cosine_sim}
+\end{equation}
+Sentence translations exhibiting $\mathcal{S}_{sim} < 0.65$ are marked as suspicious ($\mathcal{F}_{sim}$), automatically triggering an article status change from \texttt{ready} to \texttt{needs\_review}.
+
+\subsection{Grounded Abstractive Summarization with Attribution}
+Following verified sentence-level translation, the system synthesizes an executive journalistic summary. To eliminate hallucination risks, the summarization engine is structured as a \textbf{Closed-Book Grounded Synthesizer}.
+
+The prompt context is strictly bounded to the numbered English sentence sequence:
+\begin{equation}
+    \mathcal{C} = \big\{ [S_0]\; s_0^{en}, \; [S_1]\; s_1^{en}, \; \dots, \; [S_{N-1}]\; s_{N-1}^{en} \big\}
+    \label{eq:context_prompt}
+\end{equation}
+The summarizer is constrained via JSON schema enforcement to output:
+\begin{itemize}
+    \item \textbf{Headline ($\mathcal{H}_{en}$):} A concise, objective English headline.
+    \item \textbf{Two-Line Executive Summary ($\Sigma_{brief}$):} A two-sentence synthesis of the core development.
+    \item \textbf{Key Fact Points ($\mathcal{K}$):} A list of 3--5 bullet statements $\{k_1, k_2, \dots, k_M\}$. Crucially, each bullet point must explicitly cite its supporting evidence sentence indices:
+    \begin{equation}
+        k_j = \big( \text{Text}_j, \; \mathcal{E}_j \subseteq \{0, 1, \dots, N-1\} \big)
+        \label{eq:key_point_evidence}
+    \end{equation}
+\end{itemize}
+
+\subsubsection{7-Layer Faithfulness Verification and Extractive Fallback}
+Before committing the summary to the database, an automated verification engine evaluates the generated key points:
+\begin{enumerate}
+    \item \textbf{Index Range Validation:} Confirms that all cited indices $\forall e \in \mathcal{E}_j$ satisfy $0 \le e < N$.
+    \item \textbf{Lexical Entailment Scoring:} Evaluates whether the tokens comprising $\text{Text}_j$ demonstrate substantive n-gram overlap and semantic entailment with the cited evidence sentences $\bigcup_{e \in \mathcal{E}_j} s_e^{en}$.
+    \item \textbf{Extractive Fallback:} If any key point cites invalid indices or exhibits semantic divergence exceeding tolerance thresholds, the generative summary is discarded. In its place, the system activates an algorithmic TextRank extractive summarizer that extracts the top 3 central sentences directly from $S_{en}$, ensuring absolute zero-hallucination guarantees.
+\end{enumerate}
+
+\subsection{Interactive Multimodal Presentation \& Conversational Q\&A}
+The translated and verified output is rendered through a Next.js web application designed for accessibility, transparency, and deep inquiry:
+\begin{itemize}
+    \item \textbf{Interactive Dual-Reader:} Kannada source paragraphs and English translations are displayed in synchronized side-by-side columns. Hovering over or selecting any sentence in either column dynamically highlights its corresponding translation in the opposing language.
+    \item \textbf{Evidence Pill Traversal:} Clicking an evidence badge (e.g., \texttt{[S2]}) on any summary key point instantly scrolls the dual-reader to sentence 2 and highlights both the Kannada and English source text.
+    \item \textbf{Speed-Adaptive Audio Briefing:} An embedded Web Speech synthesis engine delivers an English audio briefing of the headline, executive summary, and key points. The player utilizes an active sentence queue architecture: modifying the speech playback rate ($1\times, 1.25\times, 1.5\times, 2\times$) dynamically updates the rate of the currently active sentence without resetting playback to the beginning.
+    \item \textbf{``Ask the Article'' Grounded Chatbot:} Users can submit arbitrary queries regarding the news story. The query is resolved against the numbered sentence context $\mathcal{C}$ using an extractive fallback and strict prompt boundaries, returning concise answers paired with clickable evidence citations.
+\end{itemize}
+
+% -----------------------------------------------------------------------------
+% REFERENCES
+% -----------------------------------------------------------------------------
+\begin{thebibliography}{00}
+
+\bibitem{vaswani2017attention}
+A.~Vaswani, N.~Shazeer, N.~Parmar, J.~Uszkoreit, L.~Jones, A.~N. Gomez, {\L}.~Kaiser, and I.~Polosukhin, ``Attention is all you need,'' in \textit{Advances in Neural Information Processing Systems (NeurIPS)}, vol.~30, 2017, pp. 5998--6008.
+
+\bibitem{haddow2022survey}
+B.~Haddow, R.~Bawden, A.~V. Miceli~Barone, J.~Helcl, and A.~Birch, ``Survey of low-resource machine translation,'' \textit{Computational Linguistics}, vol.~48, no.~3, pp. 673--732, Sep. 2022.
+
+\bibitem{liu2020multilingual}
+Y.~Liu, J.~Gu, N.~Goyal, X.~Li, S.~Edunov, M.~Ghazvininejad, M.~Lewis, and L.~Zettlemoyer, ``Multilingual denoising pre-training for neural machine translation,'' \textit{Transactions of the Association for Computational Linguistics (TACL)}, vol.~8, pp. 726--742, 2020.
+
+\bibitem{tang2020multilingual}
+Y.~Tang, C.~Tran, X.~Li, P.-J. Chen, N.~Goyal, V.~Chaudhary, J.~Gu, and A.~Fan, ``Multilingual translation with extensible multilingual pretraining and finetuning,'' \textit{arXiv preprint arXiv:2008.00401}, 2020.
+
+\bibitem{nllb2024scaling}
+{NLLB Team}, M.~R. Costa-juss{\`a}, J.~Cross, O.~Celebi, M.~Elbayad, K.~Heafield, K.~Heffernan, E.~Kalyanpur, J.~Schwenk, et al., ``Scaling neural machine translation to 200 languages,'' \textit{Nature}, vol.~630, pp. 841--846, 2024.
+
+\bibitem{ramesh2022samanantar}
+G.~Ramesh, S.~Doddapaneni, A.~Bapna, M.~M. Khapra, and P.~Kumar, ``Samanantar: The largest publicly available parallel corpora collection for 11 Indic languages,'' \textit{Transactions of the Association for Computational Linguistics (TACL)}, vol.~10, pp. 145--162, 2022.
+
+\bibitem{gala2023indictrans2}
+J.~Gala, P.~A. Chitale, R.~K. Raghavan, V.~Joshi, S.~Doddapaneni, V.~Rangan, A.~M. P., A.~K. B., et al., ``IndicTrans2: Towards high-quality and accessible machine translation models for all 22 scheduled Indian languages,'' \textit{Transactions on Machine Learning Research (TMLR)}, 2023.
+
+\bibitem{goyal2022flores}
+N.~Goyal, S.~Gao, V.~Chaudhary, P.-J. Chen, G.~Wenzek, D.~Ju, S.~Krishnan, M.~Shen, N.~Lakhotia, et al., ``The Flores-101 evaluation benchmark for low-resource and multilingual machine translation,'' \textit{Transactions of the Association for Computational Linguistics (TACL)}, vol.~10, pp. 522--538, 2022.
+
+\bibitem{rei2020comet}
+R.~Rei, C.~Stewart, A.~C. Farinha, and A.~Lavie, ``COMET: A neural framework for MT evaluation,'' in \textit{Proc. Conf. Empirical Methods in Natural Language Processing (EMNLP)}, 2020, pp. 2685--2702.
+
+\bibitem{hendy2023gpt}
+A.~Hendy, M.~Abdelrehim, A.~Amr, M.~Abdelghany, M.~Khaled, M.~Kamal, M.~Hany, R.~Mohey, et al., ``How good are GPT models at machine translation? A comprehensive evaluation,'' \textit{arXiv preprint arXiv:2302.09210}, 2023.
+
+\bibitem{feng2022language}
+F.~Feng, Y.~Yang, D.~Cer, N.~Arivazhagan, and W.~Wang, ``Language-agnostic BERT sentence embeddings,'' in \textit{Proc. 60th Annual Meeting of the Association for Computational Linguistics (ACL)}, 2022, pp. 878--891.
+
+\end{thebibliography}
+
+\end{document}
