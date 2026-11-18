@@ -39,28 +39,28 @@ export default function HomePage() {
   return (
     <div>
       {/* Hero Banner */}
-      <div className="bg-linear-to-r from-indigo-700 via-indigo-600 to-indigo-800 rounded-2xl p-6 sm:p-8 text-white mb-8 shadow-sm">
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 text-black mb-8 shadow-xs">
         <div className="max-w-3xl">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/20 backdrop-blur mb-3">
-            <Sparkles className="w-3.5 h-3.5" />
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 border border-slate-300 text-black mb-3">
+            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
             Verified Translate-Then-Summarize Pipeline
           </span>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-2">
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-black mb-2">
             AI-Powered News Translation from Kannada to English
           </h1>
-          <p className="text-indigo-100 text-sm sm:text-base leading-relaxed mb-5">
+          <p className="text-black text-sm sm:text-base font-normal leading-relaxed mb-5">
             Read contemporary Kannada news with sentence-aligned English translations and grounded summaries verified against source evidence.
           </p>
           <div className="flex flex-wrap gap-3">
             <Link
               href="/submit"
-              className="bg-white text-indigo-700 hover:bg-indigo-50 font-semibold px-4 py-2 rounded-lg text-sm shadow-xs transition inline-flex items-center gap-1.5"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg text-sm shadow-xs transition inline-flex items-center gap-1.5"
             >
               Submit an Article &rarr;
             </Link>
             <Link
               href="/kannada"
-              className="bg-indigo-500/40 hover:bg-indigo-500/60 text-white font-medium px-4 py-2 rounded-lg text-sm transition"
+              className="bg-slate-100 hover:bg-slate-200 text-black border border-slate-200 font-medium px-4 py-2 rounded-lg text-sm transition"
             >
               Browse Kannada Feed
             </Link>
