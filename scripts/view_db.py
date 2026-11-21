@@ -72,3 +72,4 @@ for idx, a in enumerate(articles, 1):
 print("\n" + "=" * 75)
 print("Tip: Run 'python scripts/view_db.py' anytime to inspect your SQLite database.")
 conn.close()
+
