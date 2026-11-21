@@ -11,7 +11,7 @@ import EntityChips from "@/components/EntityChips";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { AskArticleChat } from "@/components/AskArticleChat";
 import ExamPrepHub from "@/components/ExamPrepHub";
-import { Bookmark, BookmarkCheck, ExternalLink, MessageSquare, ArrowLeft, RefreshCw, Loader2, Sparkles, GraduationCap } from "lucide-react";
+import { Bookmark, BookmarkCheck, ExternalLink, MessageSquare, ArrowLeft, RefreshCw, Loader2, Sparkles, GraduationCap, Download } from "lucide-react";
 
 export default function ArticleDetailPage() {
   const params = useParams();
@@ -142,6 +142,15 @@ export default function ArticleDetailPage() {
         </Link>
 
         <div className="flex items-center gap-2">
+          <a
+            href="#download-exam-banner"
+            className="p-2 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+            title="Download UPSC & KPSC practice test sheet"
+          >
+            <Download className="w-4 h-4 text-emerald-600" />
+            <span>Download Exam Sheet</span>
+          </a>
+
           <a
             href="#exam-prep-section"
             className="p-2 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"

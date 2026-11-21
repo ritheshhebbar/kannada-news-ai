@@ -21,6 +21,7 @@ import {
   Trash2,
   ListFilter,
   CheckCheck,
+  Printer,
 } from "lucide-react";
 import { api, ExamPrepResponse, ExamMCQ, ExamDescriptive } from "@/lib/api";
 
@@ -218,7 +219,87 @@ export default function ExamPrepHub({ articleId, onSelectEvidence }: ExamPrepHub
     const fullText = generateFullStudySheet();
     navigator.clipboard.writeText(fullText);
     setCopiedAll(true);
-    setTimeout(() => setCopiedAll(null as any), 2500);
+    setTimeout(() => setCopiedAll(false), 2500);
+  };
+
+  const handlePrintPdf = () => {
+    if (!data) return;
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      alert("Please allow popups to open the printable exam sheet.");
+      return;
+    }
+    const content = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>UPSC & KPSC Exam Sheet - Article ${articleId}</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.5; color: #1e293b; padding: 40px; max-width: 850px; margin: 0 auto; }
+          h1 { font-size: 20px; font-weight: 800; color: #0f172a; margin-bottom: 4px; border-bottom: 2px solid #4f46e5; padding-bottom: 8px; }
+          .meta { font-size: 12px; color: #64748b; margin-bottom: 20px; }
+          .badge { display: inline-block; background: #e0e7ff; color: #3730a3; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 4px; margin-right: 6px; }
+          .section-title { font-size: 14px; font-weight: bold; text-transform: uppercase; background: #f1f5f9; padding: 6px 10px; margin: 25px 0 15px 0; border-left: 4px solid #4f46e5; }
+          .q-card { margin-bottom: 20px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; page-break-inside: avoid; }
+          .q-text { font-size: 13px; font-weight: 600; margin-bottom: 8px; white-space: pre-line; }
+          .options { font-size: 12px; margin-left: 10px; }
+          .opt-item { margin-bottom: 4px; }
+          .ans-box { margin-top: 10px; padding: 8px; background: #f8fafc; border-left: 3px solid #10b981; font-size: 12px; }
+          .mains-q { font-size: 13px; font-weight: bold; margin-bottom: 8px; }
+          .mains-ans { font-size: 12px; margin-top: 6px; line-height: 1.6; }
+          @media print { body { padding: 20px; } .no-print { display: none; } }
+        </style>
+      </head>
+      <body>
+        <div class="no-print" style="margin-bottom: 20px; display: flex; justify-content: space-between;">
+          <button onclick="window.print()" style="background:#4f46e5;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:bold;">🖨️ Print / Save as PDF</button>
+          <button onclick="window.close()" style="background:#e2e8f0;color:#334155;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;">Close Window</button>
+        </div>
+        <h1>UPSC & KPSC Civil Services Exam Practice Sheet</h1>
+        <div class="meta">
+          <div><strong>Source:</strong> Verified Regional Journalism (KannadaNewsAI) • <strong>Date:</strong> ${new Date().toLocaleDateString()}</div>
+          <div style="margin-top:6px;"><strong>Syllabus Mapping:</strong> ${data.syllabus_focus?.map((t: string) => `<span class="badge">${t}</span>`).join(" ")}</div>
+          <div style="margin-top:8px;font-style:italic;">${data.exam_relevance_summary}</div>
+        </div>
+
+        <div class="section-title">Part I: Prelims Multiple Choice Questions (MCQs)</div>
+        ${data.mcqs?.map((m: any, idx: number) => `
+          <div class="q-card">
+            <div style="font-size:11px;color:#6366f1;font-weight:bold;margin-bottom:4px;">QUESTION ${idx + 1} • ${m.subject_tag || 'General Studies'} (${m.difficulty || 'Medium'})</div>
+            <div class="q-text">${m.question}</div>
+            <div class="options">
+              ${m.options?.map((opt: string) => `<div class="opt-item">[ &nbsp; ] ${opt}</div>`).join("")}
+            </div>
+            <div class="ans-box">
+              <strong>Correct Answer: Option ${String.fromCharCode(65 + m.correct_index)}</strong> • <em>Evidence Sentences: ${m.evidence_indices?.map((i: number) => `[S${i}]`).join(", ") || "[None]"}</em>
+              <div style="margin-top:4px;">${m.explanation}</div>
+            </div>
+          </div>
+        `).join("")}
+
+        <div class="section-title">Part II: Mains Analytical Questions & Model Answers</div>
+        ${data.descriptive?.map((d: any, idx: number) => `
+          <div class="q-card">
+            <div style="font-size:11px;color:#6366f1;font-weight:bold;margin-bottom:4px;">QUESTION ${idx + 1} (${d.marks || 10} Marks | ${d.word_limit || 150} Words) • ${d.syllabus_paper}</div>
+            <div class="mains-q">"${d.question}"</div>
+            <div class="mains-ans">
+              <div><strong>1. Context & Introduction:</strong> ${d.model_answer.introduction}</div>
+              <div style="margin-top:4px;"><strong>2. Core Dimensions:</strong>
+                <ul>${d.model_answer.key_dimensions?.map((k: string) => `<li>${k}</li>`).join("")}</ul>
+              </div>
+              <div style="margin-top:4px;"><strong>3. Policy Framework:</strong> ${d.model_answer.policy_implications}</div>
+              <div style="margin-top:4px;"><strong>4. Way Forward:</strong> ${d.model_answer.way_forward}</div>
+            </div>
+          </div>
+        `).join("")}
+      </body>
+      </html>
+    `;
+    printWindow.document.write(content);
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.print();
+    }, 400);
   };
 
   // Score calculations
@@ -316,10 +397,20 @@ export default function ExamPrepHub({ articleId, onSelectEvidence }: ExamPrepHub
             type="button"
             onClick={handleDownloadSheet}
             title="Download full practice test paper as text document"
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 text-xs font-semibold transition cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition cursor-pointer"
           >
-            <Download className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-            <span>Download Paper</span>
+            <Download className="w-3.5 h-3.5" />
+            <span>Download (.txt)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handlePrintPdf}
+            title="Open printable exam sheet (Save as PDF)"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition cursor-pointer"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>Print / PDF</span>
           </button>
 
           <button
@@ -359,6 +450,44 @@ export default function ExamPrepHub({ articleId, onSelectEvidence }: ExamPrepHub
           )}
         </div>
       )}
+
+      {/* High-Visibility Download Banner */}
+      <div id="download-exam-banner" className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 border-2 border-emerald-400 dark:border-emerald-600 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+            <Download className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="text-xs sm:text-sm font-extrabold text-emerald-950 dark:text-emerald-100 flex items-center gap-2">
+              <span>Download & Print Practice Test Paper</span>
+              <span className="text-[10px] bg-emerald-200 dark:bg-emerald-800 text-emerald-900 dark:text-emerald-100 px-1.5 py-0.2 rounded font-bold">PDF / TXT</span>
+            </h4>
+            <p className="text-[11px] text-emerald-800 dark:text-emerald-300 mt-0.5">
+              Includes all {data.mcqs?.length || 5} Prelims MCQs, Mains questions with model answers & sentence citations.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={handleDownloadSheet}
+            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            <span>Download (.txt)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handlePrintPdf}
+            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition cursor-pointer"
+          >
+            <Printer className="w-4 h-4" />
+            <span>Print / Save PDF</span>
+          </button>
+        </div>
+      </div>
 
       {/* Mode Switcher Tabs */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-700/60 pb-2">
