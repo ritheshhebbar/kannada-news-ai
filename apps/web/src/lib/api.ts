@@ -130,6 +130,39 @@ export interface ArticleAskResponse {
   grounded: boolean;
 }
 
+export interface ExamMCQ {
+  question: string;
+  options: string[];
+  correct_index: number;
+  explanation: string;
+  evidence_indices: number[];
+  difficulty: string;
+  subject_tag: string;
+}
+
+export interface ExamDescriptive {
+  question: string;
+  marks: number;
+  word_limit: number;
+  syllabus_paper: string;
+  model_answer: {
+    introduction: string;
+    key_dimensions: string[];
+    policy_implications: string;
+    way_forward: string;
+  };
+  evidence_indices: number[];
+}
+
+export interface ExamPrepResponse {
+  article_id: number;
+  exam_relevance_summary: string;
+  syllabus_focus: string[];
+  mcqs: ExamMCQ[];
+  descriptive: ExamDescriptive[];
+  generated_at?: string;
+}
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
 export function getSessionId(): string {
@@ -213,6 +246,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ question, session_id: sessionId }),
     }),
+
+  getExamPrep: (articleId: number, force: boolean = false) =>
+    request<ExamPrepResponse>(`/articles/${articleId}/exam-prep${force ? "?force=true" : ""}`),
 
   syncRssNews: () =>
     request<{ status: string; message: string }>("/collector/sync", { method: "POST" }),

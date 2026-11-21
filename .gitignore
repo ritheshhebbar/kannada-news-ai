@@ -46,7 +46,7 @@ pnpm-debug.log*
 *.key
 
 # Machine Learning & Cache
-models/
+/models/
 checkpoints/
 *.pt
 *.bin

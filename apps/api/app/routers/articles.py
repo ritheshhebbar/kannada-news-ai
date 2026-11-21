@@ -14,8 +14,10 @@ from app.schemas.schemas import (
     ArticleStatusResponse,
     ArticleAskRequest,
     ArticleAskResponse,
+    ExamPrepResponse,
 )
 from app.services.article_service import ArticleService
+from app.services.exam_prep_service import ExamPrepService
 
 router = APIRouter(prefix="/articles", tags=["Articles"])
 
@@ -137,4 +139,36 @@ def ask_article_question(
             detail=f"Article with ID {article_id} not found."
         )
     return res
+
+
+@router.get("/{article_id}/exam-prep", response_model=ExamPrepResponse)
+def get_article_exam_prep(
+    article_id: int,
+    force: bool = Query(False, description="Force re-generation of questions"),
+    db: Session = Depends(get_db)
+):
+    """Retrieve or generate UPSC & KPSC exam preparation questions (Prelims MCQs & Mains Descriptive)."""
+    res = ExamPrepService.get_or_generate_exam_prep(db, article_id, force=force)
+    if not res:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Article with ID {article_id} not found."
+        )
+    return res
+
+
+@router.post("/{article_id}/exam-prep", response_model=ExamPrepResponse)
+def regenerate_article_exam_prep(
+    article_id: int,
+    db: Session = Depends(get_db)
+):
+    """Force fresh generation of UPSC & KPSC exam preparation questions."""
+    res = ExamPrepService.get_or_generate_exam_prep(db, article_id, force=True)
+    if not res:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Article with ID {article_id} not found."
+        )
+    return res
+
 

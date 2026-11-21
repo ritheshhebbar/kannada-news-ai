@@ -255,3 +255,33 @@ class ArticleAskResponse(BaseModel):
     cited_sentences: List[int] = []
     grounded: bool = True
 
+
+# --- UPSC & KPSC Exam Prep Schemas ---
+
+class ExamMCQ(BaseModel):
+    question: str
+    options: List[str]
+    correct_index: int
+    explanation: str
+    evidence_indices: List[int] = []
+    difficulty: str = "Medium"
+    subject_tag: str = "General Studies"
+
+
+class ExamDescriptive(BaseModel):
+    question: str
+    marks: int = 10
+    word_limit: int = 150
+    syllabus_paper: str = "GS Paper II: Polity & Governance"
+    model_answer: Dict[str, Any]
+    evidence_indices: List[int] = []
+
+
+class ExamPrepResponse(BaseModel):
+    article_id: int
+    exam_relevance_summary: str
+    syllabus_focus: List[str] = []
+    mcqs: List[ExamMCQ] = []
+    descriptive: List[ExamDescriptive] = []
+    generated_at: Optional[datetime] = None
+

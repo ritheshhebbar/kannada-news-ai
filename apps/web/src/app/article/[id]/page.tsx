@@ -10,7 +10,8 @@ import VerificationPanel from "@/components/VerificationPanel";
 import EntityChips from "@/components/EntityChips";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { AskArticleChat } from "@/components/AskArticleChat";
-import { Bookmark, BookmarkCheck, ExternalLink, MessageSquare, ArrowLeft, RefreshCw, Loader2, Sparkles } from "lucide-react";
+import ExamPrepHub from "@/components/ExamPrepHub";
+import { Bookmark, BookmarkCheck, ExternalLink, MessageSquare, ArrowLeft, RefreshCw, Loader2, Sparkles, GraduationCap } from "lucide-react";
 
 export default function ArticleDetailPage() {
   const params = useParams();
@@ -141,6 +142,15 @@ export default function ArticleDetailPage() {
         </Link>
 
         <div className="flex items-center gap-2">
+          <a
+            href="#exam-prep-section"
+            className="p-2 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+            title="Jump to UPSC & KPSC practice questions"
+          >
+            <GraduationCap className="w-4 h-4 text-indigo-600" />
+            <span className="hidden sm:inline">UPSC & KPSC Study Hub</span>
+          </a>
+
           <button
             type="button"
             onClick={toggleBookmark}
@@ -259,13 +269,21 @@ export default function ArticleDetailPage() {
           />
         </div>
 
-        {/* Right Column: Sentence-Aligned Reader (8 cols) */}
-        <div className="lg:col-span-8">
+        {/* Right Column: Sentence-Aligned Reader & Exam Prep (8 cols) */}
+        <div className="lg:col-span-8 space-y-6">
           <SideBySide
             sentences={article.sentences}
             highlightedIdx={highlightedSentIdx}
             onSentenceClick={(idx) => setHighlightedSentIdx(idx)}
           />
+
+          {/* UPSC & KPSC Civil Services Exam Prep Hub */}
+          <div id="exam-prep-section">
+            <ExamPrepHub
+              articleId={articleId}
+              onSelectEvidence={(sIdx) => setHighlightedSentIdx(sIdx)}
+            />
+          </div>
         </div>
       </div>
 
