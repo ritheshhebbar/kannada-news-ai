@@ -15,7 +15,12 @@ import {
   FileText,
   Award,
   Sparkles,
-  ExternalLink,
+  Bookmark,
+  BookmarkCheck,
+  Download,
+  Trash2,
+  ListFilter,
+  CheckCheck,
 } from "lucide-react";
 import { api, ExamPrepResponse, ExamMCQ, ExamDescriptive } from "@/lib/api";
 
@@ -24,13 +29,20 @@ interface ExamPrepHubProps {
   onSelectEvidence?: (sentenceIdx: number) => void;
 }
 
+interface SavedMCQItem extends ExamMCQ {
+  articleId: number;
+  savedAt: string;
+}
+
+const LOCAL_STORAGE_KEY = "kannada_news_saved_mcqs";
+
 export default function ExamPrepHub({ articleId, onSelectEvidence }: ExamPrepHubProps) {
   const [data, setData] = useState<ExamPrepResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"prelims" | "mains">("prelims");
+  const [activeTab, setActiveTab] = useState<"prelims" | "mains" | "saved">("prelims");
 
   // Track user selections for each MCQ: { [mcqIndex]: selectedOptionIndex }
   const [selectedAnswers, setSelectedAnswers] = useState<{ [key: number]: number }>({});
@@ -38,8 +50,64 @@ export default function ExamPrepHub({ articleId, onSelectEvidence }: ExamPrepHub
   // Track expanded state for descriptive questions: { [descIndex]: boolean }
   const [expandedMains, setExpandedMains] = useState<{ [key: number]: boolean }>({ 0: true });
 
-  // Track copy feedback for descriptive questions
+  // Track copy feedback for individual descriptive questions
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+
+  // Track copy all questions feedback
+  const [copiedAll, setCopiedAll] = useState(false);
+
+  // Saved MCQs in localStorage
+  const [savedMcqs, setSavedMcqs] = useState<SavedMCQItem[]>([]);
+
+  // Load saved MCQs from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (stored) {
+        setSavedMcqs(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.error("Failed to load saved MCQs:", e);
+    }
+  }, []);
+
+  const persistSavedMcqs = (items: SavedMCQItem[]) => {
+    setSavedMcqs(items);
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(items));
+    } catch (e) {
+      console.error("Failed to save MCQs to storage:", e);
+    }
+  };
+
+  const isMcqSaved = (mcq: ExamMCQ): boolean => {
+    return savedMcqs.some(
+      (s) => s.question.trim().toLowerCase() === mcq.question.trim().toLowerCase()
+    );
+  };
+
+  const toggleSaveMcq = (mcq: ExamMCQ) => {
+    const alreadySaved = isMcqSaved(mcq);
+    if (alreadySaved) {
+      const filtered = savedMcqs.filter(
+        (s) => s.question.trim().toLowerCase() !== mcq.question.trim().toLowerCase()
+      );
+      persistSavedMcqs(filtered);
+    } else {
+      const newItem: SavedMCQItem = {
+        ...mcq,
+        articleId,
+        savedAt: new Date().toISOString(),
+      };
+      persistSavedMcqs([newItem, ...savedMcqs]);
+    }
+  };
+
+  const clearAllSaved = () => {
+    if (confirm("Are you sure you want to clear all bookmarked questions?")) {
+      persistSavedMcqs([]);
+    }
+  };
 
   const fetchExamPrep = async (force: boolean = false) => {
     if (force) setRefreshing(true);
@@ -85,18 +153,96 @@ export default function ExamPrepHub({ articleId, onSelectEvidence }: ExamPrepHub
     setTimeout(() => setCopiedIndex(null), 2500);
   };
 
+  // Build full study text for download/copy
+  const generateFullStudySheet = (): string => {
+    if (!data) return "";
+
+    let text = `========================================================================\n`;
+    text += `   UPSC & KPSC CIVIL SERVICES COMPREHENSIVE PRACTICE SHEET\n`;
+    text += `   Grounded in Regional Kannada Journalism (KannadaNewsAI)\n`;
+    text += `========================================================================\n\n`;
+    text += `EXAM RELEVANCE:\n${data.exam_relevance_summary}\n\n`;
+    text += `SYLLABUS TOPICS:\n${data.syllabus_focus?.join(" | ") || "General Studies"}\n\n`;
+    text += `------------------------------------------------------------------------\n`;
+    text += `PART I: PRELIMS MULTIPLE CHOICE QUESTIONS (MCQs)\n`;
+    text += `------------------------------------------------------------------------\n\n`;
+
+    data.mcqs?.forEach((m, idx) => {
+      text += `Q${idx + 1}. [${m.subject_tag || "General Studies"}] (${m.difficulty || "Medium"})\n`;
+      text += `${m.question}\n\n`;
+      m.options.forEach((opt) => {
+        text += `   ${opt}\n`;
+      });
+      text += `\n>> Correct Answer: Option ${String.fromCharCode(65 + m.correct_index)}\n`;
+      text += `>> Evidence Sentences: ${m.evidence_indices?.map((i) => `[S${i}]`).join(", ") || "[None]"}\n`;
+      text += `>> Explanation: ${m.explanation}\n\n`;
+      text += `------------------------------------------------------------------------\n\n`;
+    });
+
+    text += `------------------------------------------------------------------------\n`;
+    text += `PART II: MAINS DESCRIPTIVE QUESTIONS & MODEL ANSWERS\n`;
+    text += `------------------------------------------------------------------------\n\n`;
+
+    data.descriptive?.forEach((d, idx) => {
+      text += `Question ${idx + 1} (${d.marks || 10} Marks | ${d.word_limit || 150} Words) [${d.syllabus_paper || "GS Paper"}]:\n`;
+      text += `"${d.question}"\n\n`;
+      text += `STRUCTURED MODEL ANSWER:\n`;
+      text += `1. Introduction:\n   ${d.model_answer.introduction}\n\n`;
+      text += `2. Key Dimensions:\n`;
+      d.model_answer.key_dimensions?.forEach((k) => {
+        text += `   • ${k}\n`;
+      });
+      text += `\n3. Policy & Governance Links:\n   ${d.model_answer.policy_implications}\n\n`;
+      text += `4. Administrative Way Forward:\n   ${d.model_answer.way_forward}\n\n`;
+      text += `>> Evidence Sentences: ${d.evidence_indices?.map((i) => `[S${i}]`).join(", ") || "[None]"}\n\n`;
+      text += `------------------------------------------------------------------------\n\n`;
+    });
+
+    return text;
+  };
+
+  const handleDownloadSheet = () => {
+    const fullText = generateFullStudySheet();
+    const blob = new Blob([fullText], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `UPSC_KPSC_Exam_Prep_Article_${articleId}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCopyAll = () => {
+    const fullText = generateFullStudySheet();
+    navigator.clipboard.writeText(fullText);
+    setCopiedAll(true);
+    setTimeout(() => setCopiedAll(null as any), 2500);
+  };
+
+  // Score calculations
+  const totalMcqs = data?.mcqs?.length || 0;
+  const answeredCount = Object.keys(selectedAnswers).length;
+  const correctCount = Object.entries(selectedAnswers).filter(
+    ([qIdx, optIdx]) => data?.mcqs[parseInt(qIdx)]?.correct_index === optIdx
+  ).length;
+
   if (loading) {
     return (
       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-6 shadow-xs animate-pulse">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-950/60" />
+          <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-950/60" />
           <div className="space-y-1.5 flex-1">
             <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/3" />
             <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded w-1/2" />
           </div>
         </div>
-        <div className="h-20 bg-slate-50 dark:bg-slate-800/40 rounded-xl mb-4" />
-        <div className="h-32 bg-slate-100 dark:bg-slate-700/40 rounded-xl" />
+        <div className="h-24 bg-slate-50 dark:bg-slate-800/40 rounded-xl mb-4" />
+        <div className="space-y-3">
+          <div className="h-20 bg-slate-100 dark:bg-slate-700/40 rounded-xl" />
+          <div className="h-20 bg-slate-100 dark:bg-slate-700/40 rounded-xl" />
+        </div>
       </div>
     );
   }
@@ -112,10 +258,10 @@ export default function ExamPrepHub({ articleId, onSelectEvidence }: ExamPrepHub
         <button
           type="button"
           onClick={() => fetchExamPrep(true)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs transition"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs transition cursor-pointer"
         >
           <RefreshCw className="w-3.5 h-3.5" />
-          Try Generating Again
+          Generate Questions
         </button>
       </div>
     );
@@ -123,11 +269,11 @@ export default function ExamPrepHub({ articleId, onSelectEvidence }: ExamPrepHub
 
   return (
     <div className="bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-5 sm:p-6 shadow-xs space-y-5">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-700/60">
+      {/* Top Header Bar */}
+      <div className="flex flex-wrap items-start justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-700/60">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-white flex items-center justify-center shadow-xs">
-            <GraduationCap className="w-5 h-5" />
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-white flex items-center justify-center shadow-xs">
+            <GraduationCap className="w-6 h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -136,24 +282,57 @@ export default function ExamPrepHub({ articleId, onSelectEvidence }: ExamPrepHub
               </h3>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center gap-1">
                 <Sparkles className="w-2.5 h-2.5" />
-                Exam-Ready
+                Comprehensive Bank
               </span>
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-              Grounded current affairs questions curated from this verified Kannada report
+              Grounded, syllabus-mapped questions extracted from verified regional Kannada reporting
             </p>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => fetchExamPrep(true)}
-          disabled={refreshing}
-          title="Regenerate questions using Gemini"
-          className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 transition cursor-pointer disabled:opacity-50"
-        >
-          <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin text-indigo-600" : ""}`} />
-        </button>
+        {/* Global Action Toolbar */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            type="button"
+            onClick={handleCopyAll}
+            title="Copy full exam question paper & model answers"
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold transition cursor-pointer"
+          >
+            {copiedAll ? (
+              <>
+                <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="text-emerald-600">Copied All</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5 text-slate-500" />
+                <span>Copy Bank</span>
+              </>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleDownloadSheet}
+            title="Download full practice test paper as text document"
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 text-xs font-semibold transition cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span>Download Paper</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => fetchExamPrep(true)}
+            disabled={refreshing}
+            title="Re-run AI to extract more diverse questions"
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold transition cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-indigo-600" : ""}`} />
+            <span>{refreshing ? "Generating..." : "Regenerate"}</span>
+          </button>
+        </div>
       </div>
 
       {/* Exam Relevance Callout */}
@@ -161,7 +340,7 @@ export default function ExamPrepHub({ articleId, onSelectEvidence }: ExamPrepHub
         <div className="bg-gradient-to-r from-indigo-50/70 to-blue-50/70 dark:from-indigo-950/40 dark:to-blue-950/30 border border-indigo-100 dark:border-indigo-900/60 rounded-xl p-3.5 text-xs text-indigo-950 dark:text-indigo-200 space-y-1.5">
           <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-[10px] text-indigo-700 dark:text-indigo-400">
             <Award className="w-3.5 h-3.5" />
-            <span>Syllabus Relevance & Exam Utility</span>
+            <span>Civil Services Exam Utility & Syllabus Alignment</span>
           </div>
           <p className="leading-relaxed text-[11px] font-medium text-slate-700 dark:text-slate-300">
             {data.exam_relevance_summary}
@@ -182,38 +361,67 @@ export default function ExamPrepHub({ articleId, onSelectEvidence }: ExamPrepHub
       )}
 
       {/* Mode Switcher Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-700/60 pb-2">
-        <button
-          type="button"
-          onClick={() => setActiveTab("prelims")}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-            activeTab === "prelims"
-              ? "bg-indigo-600 text-white shadow-xs"
-              : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50"
-          }`}
-        >
-          <CheckCircle2 className="w-3.5 h-3.5" />
-          <span>Prelims Practice (MCQs)</span>
-          <span className="text-[10px] px-1.5 py-0.2 bg-white/20 rounded-full font-mono">
-            {data.mcqs?.length || 0}
-          </span>
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-700/60 pb-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab("prelims")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+              activeTab === "prelims"
+                ? "bg-indigo-600 text-white shadow-xs"
+                : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50"
+            }`}
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>Prelims Practice (MCQs)</span>
+            <span className="text-[10px] px-1.5 py-0.2 bg-white/20 rounded-full font-mono">
+              {data.mcqs?.length || 0}
+            </span>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("mains")}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-            activeTab === "mains"
-              ? "bg-indigo-600 text-white shadow-xs"
-              : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50"
-          }`}
-        >
-          <FileText className="w-3.5 h-3.5" />
-          <span>Mains Answer Writing</span>
-          <span className="text-[10px] px-1.5 py-0.2 bg-white/20 rounded-full font-mono">
-            {data.descriptive?.length || 0}
-          </span>
-        </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("mains")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+              activeTab === "mains"
+                ? "bg-indigo-600 text-white shadow-xs"
+                : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50"
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Mains Answer Writing</span>
+            <span className="text-[10px] px-1.5 py-0.2 bg-white/20 rounded-full font-mono">
+              {data.descriptive?.length || 0}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("saved")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+              activeTab === "saved"
+                ? "bg-amber-600 text-white shadow-xs"
+                : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50"
+            }`}
+          >
+            <BookmarkCheck className="w-3.5 h-3.5" />
+            <span>Saved MCQs</span>
+            <span className="text-[10px] px-1.5 py-0.2 bg-white/20 rounded-full font-mono">
+              {savedMcqs.length}
+            </span>
+          </button>
+        </div>
+
+        {/* Live Quiz Score Tracker */}
+        {activeTab === "prelims" && answeredCount > 0 && (
+          <div className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/60 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+            <span>Score:</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-bold">{correctCount}</span>
+            <span>/</span>
+            <span>{answeredCount}</span>
+            <span className="text-slate-400">({Math.round((correctCount / answeredCount) * 100)}%)</span>
+          </div>
+        )}
       </div>
 
       {/* Tab 1: Prelims MCQs */}
@@ -224,6 +432,7 @@ export default function ExamPrepHub({ articleId, onSelectEvidence }: ExamPrepHub
               const selectedOpt = selectedAnswers[qIdx];
               const isAnswered = selectedOpt !== undefined;
               const isCorrect = isAnswered && selectedOpt === mcq.correct_index;
+              const saved = isMcqSaved(mcq);
 
               return (
                 <div
@@ -231,13 +440,39 @@ export default function ExamPrepHub({ articleId, onSelectEvidence }: ExamPrepHub
                   className="bg-slate-50/80 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700/70 rounded-xl p-4 transition-all"
                 >
                   {/* Meta Bar */}
-                  <div className="flex items-center justify-between gap-2 mb-2.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-100 dark:border-indigo-900/50">
-                      Question {qIdx + 1} • {mcq.subject_tag || "General Studies"}
-                    </span>
-                    <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">
-                      Difficulty: <strong className="font-semibold text-slate-600 dark:text-slate-300">{mcq.difficulty || "Medium"}</strong>
-                    </span>
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-100 dark:border-indigo-900/50">
+                        MCQ {qIdx + 1} • {mcq.subject_tag || "General Studies"}
+                      </span>
+                      <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                        Difficulty: <strong className="font-semibold text-slate-700 dark:text-slate-200">{mcq.difficulty || "Medium"}</strong>
+                      </span>
+                    </div>
+
+                    {/* Save / Bookmark Button */}
+                    <button
+                      type="button"
+                      onClick={() => toggleSaveMcq(mcq)}
+                      title={saved ? "Remove from saved questions" : "Save question to revision bank"}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold transition cursor-pointer border ${
+                        saved
+                          ? "bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300"
+                          : "bg-white text-slate-600 border-slate-200 hover:border-amber-300 hover:text-amber-700 dark:bg-slate-800 dark:text-slate-300"
+                      }`}
+                    >
+                      {saved ? (
+                        <>
+                          <BookmarkCheck className="w-3.5 h-3.5 text-amber-600 fill-amber-500" />
+                          <span>Saved ⭐</span>
+                        </>
+                      ) : (
+                        <>
+                          <Bookmark className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Save MCQ</span>
+                        </>
+                      )}
+                    </button>
                   </div>
 
                   {/* Question Text */}
@@ -478,6 +713,91 @@ export default function ExamPrepHub({ articleId, onSelectEvidence }: ExamPrepHub
             })
           ) : (
             <p className="text-xs text-slate-500 text-center py-4">No descriptive questions available.</p>
+          )}
+        </div>
+      )}
+
+      {/* Tab 3: Saved MCQs Bank */}
+      {activeTab === "saved" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-700/60">
+            <div>
+              <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                Personal Saved Question Bank ({savedMcqs.length})
+              </h4>
+              <p className="text-[10px] text-slate-400">
+                Bookmarked MCQs stored locally for revision and mock practice
+              </p>
+            </div>
+
+            {savedMcqs.length > 0 && (
+              <button
+                type="button"
+                onClick={clearAllSaved}
+                className="inline-flex items-center gap-1 text-[11px] text-rose-600 hover:text-rose-700 font-semibold cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Clear All</span>
+              </button>
+            )}
+          </div>
+
+          {savedMcqs.length > 0 ? (
+            savedMcqs.map((mcq, sIdx) => (
+              <div
+                key={sIdx}
+                className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl p-4 text-xs space-y-2.5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold uppercase text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-900/50">
+                    Saved #{sIdx + 1} • {mcq.subject_tag || "General Studies"}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => toggleSaveMcq(mcq)}
+                    className="text-rose-500 hover:text-rose-700 text-[11px] font-semibold cursor-pointer inline-flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Remove</span>
+                  </button>
+                </div>
+
+                <div className="font-semibold text-slate-900 dark:text-slate-100 whitespace-pre-line leading-relaxed">
+                  {mcq.question}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
+                  {mcq.options.map((opt, optIdx) => (
+                    <div
+                      key={optIdx}
+                      className={`p-2 rounded border text-[11px] ${
+                        optIdx === mcq.correct_index
+                          ? "bg-emerald-50 dark:bg-emerald-950/60 border-emerald-400 text-emerald-900 dark:text-emerald-200 font-bold"
+                          : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400"
+                      }`}
+                    >
+                      {opt} {optIdx === mcq.correct_index && "✓ (Correct)"}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="p-2.5 rounded bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 text-[11px] space-y-1 text-slate-600 dark:text-slate-300">
+                  <div className="font-bold text-slate-800 dark:text-slate-200">
+                    Explanation:
+                  </div>
+                  <p className="leading-relaxed">{mcq.explanation}</p>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-8 text-slate-400 space-y-2">
+              <Bookmark className="w-8 h-8 mx-auto opacity-50" />
+              <p className="text-xs">No questions saved yet.</p>
+              <p className="text-[11px] text-slate-500">
+                Click <strong>"Save MCQ"</strong> on any question in the Prelims tab to add it to your personal revision bank.
+              </p>
+            </div>
           )}
         </div>
       )}

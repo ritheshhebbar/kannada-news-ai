@@ -77,7 +77,7 @@ class ExamPrepService:
 
     @staticmethod
     def _generate_via_gemini(headline: str, sentences_text: str, category: Optional[str]) -> Optional[Dict[str, Any]]:
-        """Call Gemini Flash to generate high-yield UPSC/KPSC examination questions."""
+        """Call Gemini Flash to generate an exhaustive bank of high-yield UPSC/KPSC examination questions."""
         from app.config import settings
         api_key = settings.GEMINI_API_KEY
         if not api_key:
@@ -89,13 +89,21 @@ class ExamPrepService:
             f"Headline: {headline}\n"
             f"Category/Beat: {category or 'General Affairs'}\n"
             f"Numbered Sentences:\n{sentences_text}\n\n"
-            "Generate exam-oriented study materials strictly grounded in these sentences. Return ONLY a valid JSON object matching this exact schema:\n"
+            "Generate an EXHAUSTIVE, COMPREHENSIVE study question bank capturing ALL possible exam-relevant angles from this news report.\n"
+            "Do NOT limit yourself to just 1 or 2 questions. Generate between 5 to 10 distinct, non-repetitive multiple choice questions (MCQs) and 2 to 3 Mains questions.\n\n"
+            "Cover these specific dimensions across the MCQs:\n"
+            "1. Core factual statement verification (Standard UPSC 'Consider the following statements... 1 only, 2 only, Both, Neither').\n"
+            "2. Data, statistics, budgets, and numerical precision (exact figures reported).\n"
+            "3. Key institutions, government bodies, ministries, and regulatory agencies involved.\n"
+            "4. Karnataka geographic, regional, and district-level implications.\n"
+            "5. Constitutional, policy, or legal provisions connected to the event.\n\n"
+            "Return ONLY a valid JSON object matching this exact schema:\n"
             "{\n"
-            '  "exam_relevance_summary": "1-2 sentences on why this topic is significant for UPSC and KPSC civil services aspirants (e.g. syllabus links to governance, economy, ecology, or state development)",\n'
-            '  "syllabus_focus": ["UPSC GS-II: Governance & Public Policy", "KPSC KAS: Karnataka Regional Development"],\n'
+            '  "exam_relevance_summary": "2-3 sentences explaining why this topic is vital for UPSC and KPSC civil services aspirants (linking to specific GS papers and Karnataka state governance)",\n'
+            '  "syllabus_focus": ["UPSC GS-II: Governance & Public Policy", "UPSC GS-III: Economy & Infrastructure", "KPSC KAS: Karnataka Regional Affairs"],\n'
             '  "mcqs": [\n'
             "    {\n"
-            '      "question": "Statement-based question in standard UPSC style (e.g. \'With reference to ..., consider the following statements: 1... 2... Which is/are correct?\')",\n'
+            '      "question": "Statement-based question in standard UPSC/KPSC style (e.g. \'With reference to ..., consider the following statements: 1... 2... Which is/are correct?\')",\n'
             '      "options": ["A) 1 only", "B) 2 only", "C) Both 1 and 2", "D) Neither 1 nor 2"],\n'
             '      "correct_index": 2,\n'
             '      "explanation": "Detailed explanation explaining why the correct option is right and how other statements are incorrect, explicitly grounded in the sentences.",\n'
@@ -121,7 +129,7 @@ class ExamPrepService:
             "  ]\n"
             "}\n\n"
             "Rules:\n"
-            "1. Generate 2 to 3 UPSC/KPSC standard MCQs and 1 to 2 Mains Descriptive questions.\n"
+            "1. Generate 5 to 10 comprehensive MCQs covering all available facts in the sentences, plus 2 to 3 descriptive questions.\n"
             "2. All factual claims in MCQs and descriptive model answers MUST be derived ONLY from the provided sentences.\n"
             "3. Do not invent unverified statistics. For MCQs, always provide 0-indexed 'evidence_indices' pointing to the supporting sentences.\n"
             "4. Return clean, parseable JSON with NO markdown code fences or conversational prose."
@@ -133,7 +141,8 @@ class ExamPrepService:
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {
                     "temperature": 0.2,
-                    "responseMimeType": "application/json"
+                    "responseMimeType": "application/json",
+                    "maxOutputTokens": 6000
                 }
             }
             try:
@@ -142,7 +151,7 @@ class ExamPrepService:
                     data=json.dumps(payload).encode("utf-8"),
                     headers={"Content-Type": "application/json"}
                 )
-                with urllib.request.urlopen(req, timeout=14) as resp:
+                with urllib.request.urlopen(req, timeout=22) as resp:
                     resp_data = json.loads(resp.read().decode("utf-8"))
                     raw_text = resp_data["candidates"][0]["content"]["parts"][0]["text"].strip()
                     if raw_text.startswith("```"):
@@ -160,39 +169,74 @@ class ExamPrepService:
     @staticmethod
     def _generate_deterministic_fallback(headline: str, sentences: List[str], category: Optional[str]) -> Dict[str, Any]:
         """Deterministic, zero-hallucination fallback for offline or zero-key environments."""
-        lead = sentences[0] if sentences else headline
-        second = sentences[1] if len(sentences) > 1 else lead
-
-        # Extract leading sentence text clean of [S0] prefix
-        clean_lead = re.sub(r"^\[S\d+\]\s*", "", lead)
-        clean_second = re.sub(r"^\[S\d+\]\s*", "", second)
-
         cat_clean = category or "General Studies"
         subject_tag = f"KPSC & UPSC {cat_clean}"
 
+        clean_s = [re.sub(r"^\[S\d+\]\s*", "", s).strip() for s in sentences if s.strip()]
+        if not clean_s:
+            clean_s = [headline]
+
+        s0 = clean_s[0]
+        s1 = clean_s[1] if len(clean_s) > 1 else s0
+        s2 = clean_s[2] if len(clean_s) > 2 else s1
+        s3 = clean_s[3] if len(clean_s) > 3 else s0
+        s4 = clean_s[4] if len(clean_s) > 4 else s1
+
         mcqs = [
             {
-                "question": f"With reference to recent developments reported regarding '{headline}', consider the following statements:\n1. {clean_lead[:120]}...\n2. The development directly impacts regional governance and policy implementation in Karnataka.\nWhich of the statements given above is/are correct?",
+                "question": f"With reference to the recent regional reporting on '{headline}', consider the following statements:\n1. {s0[:120]}...\n2. The development directly impacts regional policy and governance in Karnataka.\nWhich of the statements given above is/are correct?",
                 "options": ["A) 1 only", "B) 2 only", "C) Both 1 and 2", "D) Neither 1 nor 2"],
                 "correct_index": 2,
-                "explanation": f"Both statements are corroborated by the source report: Statement 1 matches the opening finding, and Statement 2 aligns with regional administrative governance.",
-                "evidence_indices": [0],
-                "difficulty": "Medium",
-                "subject_tag": subject_tag
-            },
-            {
-                "question": f"In the context of Karnataka regional current affairs, which of the following is most accurately reflected in recent reporting?\n",
-                "options": [
-                    f"A) {clean_lead[:80]}",
-                    "B) The project has been permanently shelved due to regulatory delays.",
-                    "C) The initiative is funded entirely by international multilateral banks without state participation.",
-                    "D) The matter pertains exclusively to central overseas foreign policy."
-                ],
-                "correct_index": 0,
-                "explanation": f"Option A accurately synthesizes the reported facts from sentence [S0]. Options B, C, and D are factually unsupported distractors.",
+                "explanation": f"Both statements are supported by the verified news report. Statement 1 reflects the lead finding, and Statement 2 relates to state administrative impact.",
                 "evidence_indices": [0],
                 "difficulty": "Easy",
-                "subject_tag": "Current Affairs (KPSC Prelims)"
+                "subject_tag": "Current Affairs (UPSC & KPSC)"
+            },
+            {
+                "question": f"In the context of the factual data reported, consider the following:\n1. {s1[:110]}...\n2. {s2[:110]}...\nWhich of the statements given above is/are correct according to the source report?",
+                "options": ["A) 1 only", "B) 2 only", "C) Both 1 and 2", "D) Neither 1 nor 2"],
+                "correct_index": 2,
+                "explanation": f"Both statements are corroborated by sentences [S1] and [S2] of the translated text.",
+                "evidence_indices": [1, 2] if len(clean_s) > 2 else [0],
+                "difficulty": "Medium",
+                "subject_tag": f"{cat_clean} - Factual Analysis"
+            },
+            {
+                "question": f"Regarding institutional administration in Karnataka, which of the following is most accurately indicated in the news report?\n",
+                "options": [
+                    f"A) {s0[:85]}",
+                    "B) The measure was rejected by all state regulatory authorities.",
+                    "C) The initiative was instituted entirely by foreign non-governmental agencies without domestic authorization.",
+                    "D) The project has been suspended indefinitely due to judicial prohibition."
+                ],
+                "correct_index": 0,
+                "explanation": f"Option A directly synthesizes sentence [S0]. Options B, C, and D are factually inaccurate distractors.",
+                "evidence_indices": [0],
+                "difficulty": "Medium",
+                "subject_tag": "Governance & Administration"
+            },
+            {
+                "question": f"Consider the following aspects regarding '{headline}':\n1. It addresses public requirements and regional infrastructure in Karnataka.\n2. {s3[:100]}...\nWhich of the statements given above is/are correct?",
+                "options": ["A) 1 only", "B) 2 only", "C) Both 1 and 2", "D) Neither 1 nor 2"],
+                "correct_index": 2,
+                "explanation": "Both statements represent verified facts and public interest dimensions established in the news reporting.",
+                "evidence_indices": [0, 3] if len(clean_s) > 3 else [0],
+                "difficulty": "Hard",
+                "subject_tag": "Public Policy & Development"
+            },
+            {
+                "question": f"Which of the following summaries best captures the core development reported in this article?",
+                "options": [
+                    f"A) {s0[:90]}",
+                    f"B) An official denial by authorities that any such development took place.",
+                    f"C) A retrospective historical review of events that concluded several decades ago.",
+                    f"D) An unverified social media rumor with no official corroboration."
+                ],
+                "correct_index": 0,
+                "explanation": "Option A summarizes the central event reported by the regional journalistic portal.",
+                "evidence_indices": [0],
+                "difficulty": "Easy",
+                "subject_tag": "Regional Current Affairs"
             }
         ]
 
@@ -203,16 +247,33 @@ class ExamPrepService:
                 "word_limit": 150,
                 "syllabus_paper": f"GS Paper II / Paper III: {cat_clean}",
                 "model_answer": {
-                    "introduction": f"The report brings focus to critical public administration priorities in Karnataka: {clean_lead[:140]}.",
+                    "introduction": f"The report brings focus to critical public administration priorities in Karnataka: {s0[:140]}.",
                     "key_dimensions": [
-                        f"Core Development: {clean_lead[:120]}",
-                        f"Institutional Role: Highlights the necessity of inter-departmental coordination across state agencies.",
-                        f"Citizen Impact: Direct socioeconomic and regional benefits for stakeholders in Karnataka."
+                        f"Core Development: {s0[:120]}",
+                        f"Institutional Execution: {s1[:120]}",
+                        f"Citizen & Economic Impact: {s2[:120]}"
                     ],
                     "policy_implications": "Aligns with Karnataka State Development Goals, promoting transparent project execution and accountable public delivery.",
                     "way_forward": "Implement robust monitoring frameworks, ensure transparent timeline adherence, and foster multi-stakeholder participation."
                 },
-                "evidence_indices": [0, 1] if len(sentences) > 1 else [0]
+                "evidence_indices": [0, 1, 2] if len(clean_s) > 2 else [0]
+            },
+            {
+                "question": f"Critically evaluate the administrative challenges and institutional coordination required to implement the initiatives outlined in '{headline}'.",
+                "marks": 15,
+                "word_limit": 250,
+                "syllabus_paper": "GS Paper II: Governance, Public Policy & Institutional Frameworks",
+                "model_answer": {
+                    "introduction": f"Execution of major state decisions such as '{headline}' necessitates seamless synergy between state administrative machineries and grassroots execution.",
+                    "key_dimensions": [
+                        f"Regulatory Alignment: Ensuring statutory compliance and inter-departmental clearances.",
+                        f"Financial & Resource Prudence: Transparent utilization of budgetary allocations and timeline management.",
+                        f"Public Accountability: Transparent communication to stakeholders and citizens across Karnataka districts."
+                    ],
+                    "policy_implications": "Requires adherence to Karnataka Public Procurement and Transparency Acts, minimizing bureaucratic bottlenecks.",
+                    "way_forward": "Establish dedicated single-window project delivery units with digital milestone tracking and regular public audit disclosures."
+                },
+                "evidence_indices": [0, 1] if len(clean_s) > 1 else [0]
             }
         ]
 
